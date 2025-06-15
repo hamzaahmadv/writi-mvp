@@ -25,7 +25,7 @@ const navLinks = [
   { href: "/contact", label: "Contact" }
 ]
 
-const signedInLinks = [{ href: "/todo", label: "Todo" }]
+const signedInLinks: { href: string; label: string }[] = []
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)

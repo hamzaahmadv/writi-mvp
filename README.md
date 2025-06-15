@@ -64,3 +64,4 @@ NEXT_PUBLIC_POSTHOG_HOST=
 2. Copy `.env.example` to `.env.local` and fill in the environment variables from above
 3. Run `npm install` to install dependencies
 4. Run `npm run dev` to run the app locally
+# writi-mvp
