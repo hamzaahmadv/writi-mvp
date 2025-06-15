@@ -73,10 +73,7 @@ export const HeroSection = () => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.8, ease: "easeOut" }}
         >
-          <Link
-            href="https://github.com/mckaywrigley/mckays-app-template"
-            onClick={handleGetStartedClick}
-          >
+          <Link href="/dashboard" onClick={handleGetStartedClick}>
             <Button className="bg-blue-500 text-lg hover:bg-blue-600">
               <Rocket className="mr-2 size-5" />
               Get Started &rarr;
