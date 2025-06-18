@@ -106,55 +106,40 @@ export function DocumentSidebar() {
     >
       <div
         className={`
-          figma-nav-item figma-font-body
+          mx-2 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200
           ${
             isMainNav
-              ? "figma-card"
-              : `hover:bg-gray-100 ${selectedItem === item.id || item.isActive ? "figma-text-primary bg-gray-100" : "figma-text-secondary"}`
+              ? "border border-gray-200 bg-white shadow-sm hover:shadow-md"
+              : `hover:bg-gray-100 ${selectedItem === item.id || item.isActive ? "border border-blue-200 bg-blue-50 text-gray-900" : "text-gray-600"}`
           }
           ${level > 0 ? "ml-4" : ""}
         `}
         onClick={() => setSelectedItem(item.id)}
-        style={{
-          fontFamily: "var(--font-body)",
-          fontWeight: "var(--font-weight-semibold)",
-          lineHeight: "var(--line-height-tight)"
-        }}
       >
         <item.icon
           className={`size-4 shrink-0 ${
-            isMainNav
-              ? "text-gray-700"
-              : item.iconColor || "figma-text-secondary"
+            isMainNav ? "text-gray-700" : item.iconColor || "text-gray-500"
           }`}
         />
 
         <div className="min-w-0 flex-1">
           <div
             className={`truncate text-sm ${
-              isMainNav ? "font-semibold text-gray-900" : ""
+              isMainNav ? "font-semibold text-gray-900" : "font-medium"
             }`}
-            style={{
-              fontSize: "14px",
-              fontWeight: isMainNav ? 600 : 500,
-              color: isMainNav ? "#111827" : undefined
-            }}
           >
             {item.title}
           </div>
         </div>
 
         {item.hasCheckmark && (
-          <div
-            className="flex size-4 items-center justify-center rounded-full"
-            style={{ backgroundColor: "var(--color-accent-green)" }}
-          >
+          <div className="flex size-4 items-center justify-center rounded-full bg-green-500">
             <Check className="size-2.5 text-white" />
           </div>
         )}
 
         {item.id === "designs" && (
-          <MoreHorizontal className="size-4 text-gray-700" />
+          <MoreHorizontal className="size-4 text-gray-500" />
         )}
       </div>
     </motion.div>
