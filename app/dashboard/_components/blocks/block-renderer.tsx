@@ -323,13 +323,15 @@ export function BlockRenderer({
           actions.updateBlock(block.id, { content })
         }
       },
-      className: "outline-none w-full",
+      className: "outline-none w-full transition-colors focus:ring-0",
       "data-placeholder": !block.content
         ? getBlockPlaceholder(block.type)
         : undefined,
+      "data-block-type": block.type,
       style: {
-        fontFamily: "var(--font-body)",
-        color: "var(--color-text-primary)"
+        fontFamily:
+          "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif",
+        color: "#374151"
       }
     }
 
@@ -338,8 +340,15 @@ export function BlockRenderer({
         return (
           <h1
             {...commonProps}
-            className={`${commonProps.className} text-3xl font-bold`}
-            style={{ ...commonProps.style, fontSize: "28px", fontWeight: 700 }}
+            className={`${commonProps.className} text-gray-900`}
+            style={{
+              ...commonProps.style,
+              fontSize: "2rem",
+              fontWeight: 700,
+              lineHeight: "1.2",
+              marginTop: "1.5rem",
+              marginBottom: "0.5rem"
+            }}
           />
         )
 
@@ -347,8 +356,15 @@ export function BlockRenderer({
         return (
           <h2
             {...commonProps}
-            className={`${commonProps.className} text-2xl font-semibold`}
-            style={{ ...commonProps.style, fontSize: "24px", fontWeight: 600 }}
+            className={`${commonProps.className} text-gray-900`}
+            style={{
+              ...commonProps.style,
+              fontSize: "1.5rem",
+              fontWeight: 600,
+              lineHeight: "1.3",
+              marginTop: "1.25rem",
+              marginBottom: "0.5rem"
+            }}
           />
         )
 
@@ -356,56 +372,82 @@ export function BlockRenderer({
         return (
           <h3
             {...commonProps}
-            className={`${commonProps.className} text-xl font-medium`}
-            style={{ ...commonProps.style, fontSize: "20px", fontWeight: 500 }}
+            className={`${commonProps.className} text-gray-900`}
+            style={{
+              ...commonProps.style,
+              fontSize: "1.25rem",
+              fontWeight: 600,
+              lineHeight: "1.4",
+              marginTop: "1rem",
+              marginBottom: "0.25rem"
+            }}
           />
         )
 
       case "bulleted_list":
         return (
-          <div className="flex items-start gap-2">
+          <div className="my-1 flex items-start gap-3">
+            <div className="mt-2 size-1.5 shrink-0 rounded-full bg-gray-400" />
             <div
-              className="mt-2 size-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: "var(--color-text-secondary)" }}
+              {...commonProps}
+              className={`${commonProps.className} text-gray-700`}
+              style={{
+                ...commonProps.style,
+                flex: 1,
+                fontSize: "16px",
+                lineHeight: "1.6"
+              }}
             />
-            <div {...commonProps} style={{ ...commonProps.style, flex: 1 }} />
           </div>
         )
 
       case "numbered_list":
         return (
-          <div className="flex items-start gap-2">
-            <div
-              className="figma-text-secondary mt-0.5 shrink-0"
-              style={{ fontFamily: "var(--font-body)", fontSize: "14px" }}
-            >
+          <div className="my-1 flex items-start gap-3">
+            <div className="mt-0.5 min-w-[20px] shrink-0 font-medium text-gray-500">
               1.
             </div>
-            <div {...commonProps} style={{ ...commonProps.style, flex: 1 }} />
+            <div
+              {...commonProps}
+              className={`${commonProps.className} text-gray-700`}
+              style={{
+                ...commonProps.style,
+                flex: 1,
+                fontSize: "16px",
+                lineHeight: "1.6"
+              }}
+            />
           </div>
         )
 
       case "toggle":
         return (
-          <div>
+          <div className="my-1">
             <div className="flex items-center gap-2">
               <div
-                className="cursor-pointer"
+                className="cursor-pointer rounded p-1 transition-colors hover:bg-gray-100"
                 onClick={() => setIsToggleExpanded(!isToggleExpanded)}
               >
                 {isToggleExpanded ? (
-                  <ChevronDown className="figma-text-secondary size-4" />
+                  <ChevronDown className="size-4 text-gray-500" />
                 ) : (
-                  <ChevronRight className="figma-text-secondary size-4" />
+                  <ChevronRight className="size-4 text-gray-500" />
                 )}
               </div>
               <div
                 {...commonProps}
-                style={{ ...commonProps.style, flex: 1, fontWeight: 500 }}
+                className={`${commonProps.className} text-gray-700`}
+                style={{
+                  ...commonProps.style,
+                  flex: 1,
+                  fontWeight: 500,
+                  fontSize: "16px",
+                  lineHeight: "1.6"
+                }}
               />
             </div>
             {isToggleExpanded && block.children.length > 0 && (
-              <div className="ml-6 mt-2">
+              <div className="ml-6 mt-2 border-l-2 border-gray-100 pl-2">
                 {block.children.map(child => (
                   <BlockRenderer
                     key={child.id}
@@ -423,35 +465,35 @@ export function BlockRenderer({
 
       case "callout":
         return (
-          <div
-            className="flex items-start gap-3 rounded-lg border-l-4 p-3"
-            style={{
-              backgroundColor: "var(--color-bg-tertiary)",
-              borderLeftColor: "var(--color-accent-blue)"
-            }}
-          >
-            <AlertCircle className="figma-accent-blue mt-0.5 size-5 shrink-0" />
-            <div {...commonProps} style={{ ...commonProps.style, flex: 1 }} />
+          <div className="my-2 flex items-start gap-3 rounded-lg border-l-4 border-blue-400 bg-blue-50 p-4">
+            <AlertCircle className="mt-0.5 size-5 shrink-0 text-blue-500" />
+            <div
+              {...commonProps}
+              className={`${commonProps.className} text-blue-900`}
+              style={{
+                ...commonProps.style,
+                flex: 1,
+                fontSize: "16px",
+                lineHeight: "1.6"
+              }}
+            />
           </div>
         )
 
       case "code":
         return (
-          <div
-            className="rounded-lg border p-3 font-mono text-sm"
-            style={{
-              backgroundColor: "var(--color-bg-tertiary)",
-              borderColor: "var(--color-border-light)"
-            }}
-          >
+          <div className="my-2 rounded-lg border border-gray-200 bg-gray-50 p-4 font-mono">
             <div
               {...commonProps}
+              className={`${commonProps.className} text-gray-800`}
               style={{
                 ...commonProps.style,
                 fontFamily:
-                  'Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-                fontSize: "13px",
-                whiteSpace: "pre-wrap"
+                  'ui-monospace, "SF Mono", "Monaco", "Inconsolata", "Roboto Mono", "Source Code Pro", monospace',
+                fontSize: "14px",
+                lineHeight: "1.5",
+                whiteSpace: "pre-wrap",
+                tabSize: 2
               }}
             />
           </div>
@@ -459,40 +501,37 @@ export function BlockRenderer({
 
       case "quote":
         return (
-          <div
-            className="border-l-4 py-1 pl-4"
-            style={{ borderLeftColor: "var(--color-border-medium)" }}
-          >
+          <div className="my-2 border-l-4 border-gray-300 py-2 pl-6">
             <div
               {...commonProps}
-              className={`${commonProps.className} figma-text-secondary italic`}
+              className={`${commonProps.className} italic text-gray-600`}
+              style={{
+                ...commonProps.style,
+                fontSize: "18px",
+                lineHeight: "1.6",
+                fontStyle: "italic"
+              }}
             />
           </div>
         )
 
       case "image":
         return (
-          <div className="space-y-2">
+          <div className="my-4 space-y-2">
             {block.content ? (
               <img
                 src={block.content}
                 alt="Block image"
-                className="h-auto max-w-full rounded-lg"
+                className="h-auto max-w-full rounded-lg border border-gray-200 shadow-sm"
                 onError={e => {
                   ;(e.target as HTMLImageElement).style.display = "none"
                 }}
               />
             ) : (
-              <div
-                className="flex items-center justify-center rounded-lg border-2 border-dashed p-8"
-                style={{ borderColor: "var(--color-border-medium)" }}
-              >
+              <div className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-12 transition-colors hover:bg-gray-100">
                 <div className="text-center">
-                  <ImageIcon className="figma-text-secondary mx-auto mb-2 size-12" />
-                  <div
-                    {...commonProps}
-                    className="figma-text-secondary text-sm"
-                  />
+                  <ImageIcon className="mx-auto mb-3 size-12 text-gray-400" />
+                  <div {...commonProps} className="text-sm text-gray-500" />
                 </div>
               </div>
             )}
@@ -501,17 +540,22 @@ export function BlockRenderer({
 
       case "divider":
         return (
-          <div
-            className="my-4 h-px w-full"
-            style={{ backgroundColor: "var(--color-border-medium)" }}
-          />
+          <div className="my-6 flex items-center">
+            <div className="h-px w-full bg-gray-300" />
+          </div>
         )
 
       default:
         return (
           <div
             {...commonProps}
-            style={{ ...commonProps.style, fontSize: "14px" }}
+            className={`${commonProps.className} text-gray-700`}
+            style={{
+              ...commonProps.style,
+              fontSize: "16px",
+              lineHeight: "1.6",
+              marginBottom: "0.5rem"
+            }}
           />
         )
     }
@@ -519,44 +563,43 @@ export function BlockRenderer({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 4 }}
+      initial={{ opacity: 0, y: 2 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2 }}
+      transition={{ duration: 0.15 }}
       className={`
-        group relative rounded-lg transition-all duration-200
-        ${isFocused ? "bg-blue-50/50" : "hover:bg-gray-50/50"}
-        ${isSelected ? "bg-blue-100/50" : ""}
-        ${level > 0 ? "ml-6" : ""}
+        group relative transition-all duration-150
+        ${isFocused ? "bg-blue-50/30" : ""}
+        ${isSelected ? "bg-blue-50" : "hover:bg-gray-50/30"}
       `}
       style={{ marginLeft: level > 0 ? `${level * 24}px` : undefined }}
     >
       {/* Block Controls */}
-      <div className="flex items-start gap-1">
-        <div className="flex items-center gap-1 pt-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+      <div className="flex items-start gap-2">
+        <div className="flex items-center gap-1 pt-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           <Button
             variant="ghost"
             size="icon"
-            className="figma-text-secondary hover:figma-text-primary size-5 cursor-grab"
+            className="size-6 cursor-grab p-0 text-gray-400 hover:text-gray-600 active:cursor-grabbing"
           >
             <GripVertical className="size-3" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="figma-text-secondary hover:figma-text-primary size-5"
+            className="size-6 p-0 text-gray-400 hover:text-gray-600"
             onClick={() => actions.createBlock(block.id)}
           >
             <Plus className="size-3" />
           </Button>
         </div>
 
-        <div className="min-w-0 flex-1 px-2 py-1">{renderBlockContent()}</div>
+        <div className="min-w-0 flex-1 py-1">{renderBlockContent()}</div>
 
-        <div className="flex items-center gap-1 pt-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <div className="flex items-center gap-1 pt-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           <Button
             variant="ghost"
             size="icon"
-            className="figma-text-secondary hover:figma-text-primary size-5"
+            className="size-6 p-0 text-gray-400 hover:text-gray-600"
             onClick={() => actions.duplicateBlock(block.id)}
           >
             <Copy className="size-3" />
@@ -564,7 +607,7 @@ export function BlockRenderer({
           <Button
             variant="ghost"
             size="icon"
-            className="figma-text-secondary size-5 hover:text-red-600"
+            className="size-6 p-0 text-gray-400 hover:text-red-500"
             onClick={() => actions.deleteBlock(block.id)}
           >
             <Trash2 className="size-3" />
@@ -574,7 +617,7 @@ export function BlockRenderer({
 
       {/* Render children blocks */}
       {block.children.length > 0 && block.type !== "toggle" && (
-        <div className="ml-6 mt-1">
+        <div className="ml-8 mt-1">
           {block.children.map(child => (
             <BlockRenderer
               key={child.id}

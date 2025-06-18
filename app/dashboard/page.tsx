@@ -6,19 +6,13 @@ import { WritiAiPanel } from "./_components/writi-ai-panel"
 
 export default function DashboardPage() {
   return (
-    <div
-      className="min-h-screen"
-      style={{
-        backgroundColor: "var(--color-bg-secondary)",
-        fontFamily: "var(--font-body)"
-      }}
-    >
+    <div className="min-h-screen bg-gray-50">
       <div className="flex h-screen">
         {/* Left Sidebar - Navigation */}
         <DocumentSidebar />
 
         {/* Main Editor Area */}
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           <WritiEditor />
         </div>
 

@@ -9,10 +9,13 @@ import {
   MessageSquare,
   Users,
   Eye,
-  EyeOff
+  EyeOff,
+  Loader2,
+  AlertCircle
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { BlockRenderer } from "./blocks/block-renderer"
 import { SlashCommandMenu } from "./blocks/slash-command-menu"
 import {
@@ -22,105 +25,52 @@ import {
   EditorActions,
   SlashCommand
 } from "@/types"
-import { generateBlockId } from "@/lib/block-configs"
+import { useCurrentUser } from "@/lib/hooks/use-user"
+import { usePage } from "@/lib/hooks/use-page"
+import { useBlocks } from "@/lib/hooks/use-blocks"
 
 export default function WritiEditor() {
-  // Editor state management
+  // Authentication
+  const { userId, isLoaded: userLoaded } = useCurrentUser()
+
+  // Page management
+  const {
+    currentPage,
+    pages,
+    isLoading: pageLoading,
+    error: pageError,
+    createPage,
+    updatePage
+  } = usePage(userId)
+
+  // Blocks management
+  const {
+    blocks,
+    isLoading: blocksLoading,
+    error: blocksError,
+    createBlock: createBlockInDb,
+    updateBlock: updateBlockInDb,
+    deleteBlock: deleteBlockInDb,
+    moveBlock: moveBlockInDb
+  } = useBlocks(userId, currentPage?.id || null)
+
+  // Local editor state for UI interactions
   const [editorState, setEditorState] = useState<EditorState>({
-    blocks: [
-      {
-        id: generateBlockId(),
-        type: "heading_1",
-        content: "🧬 Designs",
-        children: [],
-        props: { emoji: "🧬", createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "paragraph",
-        content: "Welcome to your Notion-style block editor! You can:",
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "bulleted_list",
-        content: 'Type "/" to open the command menu',
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "bulleted_list",
-        content: "Use markdown shortcuts like # for headings",
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "bulleted_list",
-        content: "Press Tab to indent, Shift+Tab to unindent",
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "toggle",
-        content: "Click to expand this toggle block",
-        children: [
-          {
-            id: generateBlockId(),
-            type: "paragraph",
-            content: "This is nested content inside the toggle!",
-            children: [],
-            props: { createdAt: new Date().toISOString() }
-          },
-          {
-            id: generateBlockId(),
-            type: "code",
-            content: 'console.log("Hello from code block!");',
-            children: [],
-            props: { createdAt: new Date().toISOString() }
-          }
-        ],
-        props: { createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "callout",
-        content: "This is a callout block - great for important information!",
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "quote",
-        content:
-          "This is a quote block - perfect for highlighting important text.",
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "divider",
-        content: "",
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      },
-      {
-        id: generateBlockId(),
-        type: "paragraph",
-        content: "Start typing here to add your own content...",
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      }
-    ],
+    blocks: [],
     focusedBlockId: null,
     selectedBlockIds: [],
     showSlashMenu: false,
     slashMenuPosition: { x: 0, y: 0 },
     slashMenuQuery: ""
   })
+
+  // Sync blocks from database to local state
+  useEffect(() => {
+    setEditorState(prev => ({
+      ...prev,
+      blocks
+    }))
+  }, [blocks])
 
   // Find block by ID (supports nested blocks)
   const findBlock = useCallback(
@@ -137,198 +87,103 @@ export default function WritiEditor() {
     [editorState.blocks]
   )
 
-  // Find parent block and index
-  const findBlockParentAndIndex = useCallback(
-    (
-      blockId: string,
-      blocks: Block[] = editorState.blocks,
-      parentBlocks: Block[] = editorState.blocks
-    ): {
-      parent: Block | null
-      parentBlocks: Block[]
-      index: number
-    } | null => {
-      for (let i = 0; i < blocks.length; i++) {
-        const block = blocks[i]
-        if (block.id === blockId) {
-          return { parent: null, parentBlocks, index: i }
-        }
-        if (block.children.length > 0) {
-          const found = findBlockParentAndIndex(
-            blockId,
-            block.children,
-            block.children
-          )
-          if (found)
-            return {
-              parent: block,
-              parentBlocks: found.parentBlocks,
-              index: found.index
-            }
-        }
-      }
-      return null
-    },
-    [editorState.blocks]
-  )
-
-  // Editor actions
+  // Editor actions with database integration
   const actions: EditorActions = {
     createBlock: useCallback(
-      (afterId?: string, type: BlockType = "paragraph") => {
-        const newBlockId = generateBlockId()
-        const newBlock: Block = {
-          id: newBlockId,
-          type,
-          content: "",
-          children: [],
-          props: { createdAt: new Date().toISOString() }
+      async (afterId?: string, type: BlockType = "paragraph") => {
+        if (!userId || !currentPage) return null
+
+        try {
+          const newBlockId = await createBlockInDb(afterId, type)
+          if (newBlockId) {
+            setEditorState(prev => ({
+              ...prev,
+              focusedBlockId: newBlockId
+            }))
+          }
+          return newBlockId
+        } catch (error) {
+          console.error("Failed to create block:", error)
+          return null
         }
-
-        setEditorState(prev => {
-          const newBlocks = [...prev.blocks]
-
-          if (afterId) {
-            const result = findBlockParentAndIndex(afterId, newBlocks)
-            if (result) {
-              result.parentBlocks.splice(result.index + 1, 0, newBlock)
-            } else {
-              newBlocks.push(newBlock)
-            }
-          } else {
-            newBlocks.push(newBlock)
-          }
-
-          return {
-            ...prev,
-            blocks: newBlocks,
-            focusedBlockId: newBlockId
-          }
-        })
-
-        return newBlockId
       },
-      [findBlockParentAndIndex]
+      [userId, currentPage, createBlockInDb]
     ),
 
-    updateBlock: useCallback((id: string, updates: Partial<Block>) => {
-      setEditorState(prev => {
-        const updateBlockInTree = (blocks: Block[]): Block[] => {
-          return blocks.map(block => {
-            if (block.id === id) {
-              return { ...block, ...updates }
-            }
-            if (block.children.length > 0) {
-              return { ...block, children: updateBlockInTree(block.children) }
-            }
-            return block
-          })
+    updateBlock: useCallback(
+      async (id: string, updates: Partial<Block>) => {
+        try {
+          await updateBlockInDb(id, updates)
+        } catch (error) {
+          console.error("Failed to update block:", error)
         }
+      },
+      [updateBlockInDb]
+    ),
 
-        return {
-          ...prev,
-          blocks: updateBlockInTree(prev.blocks)
-        }
-      })
-    }, []),
+    deleteBlock: useCallback(
+      async (id: string) => {
+        try {
+          await deleteBlockInDb(id)
 
-    deleteBlock: useCallback((id: string) => {
-      setEditorState(prev => {
-        const deleteBlockFromTree = (blocks: Block[]): Block[] => {
-          return blocks.filter(block => {
-            if (block.id === id) return false
-            if (block.children.length > 0) {
-              block.children = deleteBlockFromTree(block.children)
-            }
-            return true
-          })
+          // Update focus if the deleted block was focused
+          setEditorState(prev => ({
+            ...prev,
+            focusedBlockId:
+              prev.focusedBlockId === id ? null : prev.focusedBlockId
+          }))
+        } catch (error) {
+          console.error("Failed to delete block:", error)
         }
-
-        return {
-          ...prev,
-          blocks: deleteBlockFromTree(prev.blocks),
-          focusedBlockId:
-            prev.focusedBlockId === id ? null : prev.focusedBlockId
-        }
-      })
-    }, []),
+      },
+      [deleteBlockInDb]
+    ),
 
     duplicateBlock: useCallback(
-      (id: string) => {
+      async (id: string) => {
         const block = findBlock(id)
         if (!block) return
 
-        const duplicateBlockRecursive = (originalBlock: Block): Block => ({
-          ...originalBlock,
-          id: generateBlockId(),
-          children: originalBlock.children.map(child =>
-            duplicateBlockRecursive(child)
-          ),
-          props: { ...originalBlock.props, createdAt: new Date().toISOString() }
-        })
-
-        const duplicatedBlock = duplicateBlockRecursive(block)
-        actions.createBlock(id, duplicatedBlock.type)
-        actions.updateBlock(duplicatedBlock.id, duplicatedBlock)
+        try {
+          const newBlockId = await createBlockInDb(id, block.type)
+          if (newBlockId) {
+            await updateBlockInDb(newBlockId, {
+              content: block.content,
+              props: block.props
+            })
+          }
+        } catch (error) {
+          console.error("Failed to duplicate block:", error)
+        }
       },
-      [findBlock]
+      [findBlock, createBlockInDb, updateBlockInDb]
     ),
 
     moveBlock: useCallback(
-      (dragId: string, hoverId: string, position: "before" | "after") => {
-        // TODO: Implement drag and drop functionality
-        console.log("Move block:", { dragId, hoverId, position })
+      async (dragId: string, hoverId: string, position: "before" | "after") => {
+        try {
+          await moveBlockInDb(dragId, hoverId, position)
+        } catch (error) {
+          console.error("Failed to move block:", error)
+        }
       },
-      []
+      [moveBlockInDb]
     ),
 
-    indentBlock: useCallback(
-      (id: string) => {
-        setEditorState(prev => {
-          const result = findBlockParentAndIndex(id, prev.blocks)
-          if (!result || result.index === 0) return prev
-
-          const blockToIndent = result.parentBlocks[result.index]
-          const previousBlock = result.parentBlocks[result.index - 1]
-
-          // Move block to be a child of the previous block
-          const newBlocks = [...prev.blocks]
-          const updateBlockInTree = (blocks: Block[]): Block[] => {
-            return blocks.map(block => {
-              if (block.id === previousBlock.id) {
-                return {
-                  ...block,
-                  children: [...block.children, blockToIndent]
-                }
-              }
-              if (block.children.length > 0) {
-                return { ...block, children: updateBlockInTree(block.children) }
-              }
-              return block
-            })
-          }
-
-          result.parentBlocks.splice(result.index, 1)
-
-          return {
-            ...prev,
-            blocks: updateBlockInTree(newBlocks)
-          }
-        })
-      },
-      [findBlockParentAndIndex]
-    ),
+    indentBlock: useCallback((id: string) => {
+      // TODO: Implement block indentation
+      console.log("Indent block:", id)
+    }, []),
 
     unindentBlock: useCallback((id: string) => {
-      // TODO: Implement unindent functionality
+      // TODO: Implement block unindentation
       console.log("Unindent block:", id)
     }, []),
 
     focusBlock: useCallback((id: string) => {
       setEditorState(prev => ({
         ...prev,
-        focusedBlockId: id,
-        showSlashMenu: false
+        focusedBlockId: id
       }))
     }, []),
 
@@ -361,55 +216,36 @@ export default function WritiEditor() {
     }, []),
 
     executeSlashCommand: useCallback(
-      (command: SlashCommand, blockId: string) => {
-        // Update the block type and clear content
-        setEditorState(prev => {
-          const updateBlockInTree = (blocks: Block[]): Block[] => {
-            return blocks.map(block => {
-              if (block.id === blockId) {
-                return { ...block, type: command.blockType, content: "" }
-              }
-              if (block.children.length > 0) {
-                return { ...block, children: updateBlockInTree(block.children) }
-              }
-              return block
-            })
-          }
+      async (command: SlashCommand, blockId: string) => {
+        try {
+          // Update the block type and clear content
+          await updateBlockInDb(blockId, {
+            type: command.blockType,
+            content: ""
+          })
 
-          return {
-            ...prev,
-            blocks: updateBlockInTree(prev.blocks),
-            showSlashMenu: false,
-            slashMenuQuery: ""
-          }
-        })
-
-        // Refocus the block after a short delay to allow DOM update
-        setTimeout(() => {
           setEditorState(prev => ({
             ...prev,
+            showSlashMenu: false,
+            slashMenuQuery: "",
             focusedBlockId: blockId
           }))
-        }, 50) // Reduced delay for faster response
+        } catch (error) {
+          console.error("Failed to execute slash command:", error)
+        }
       },
-      []
+      [updateBlockInDb]
     )
   }
 
-  // Handle click outside to close slash menu
+  // Handle click outside to hide slash menu
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (editorState.showSlashMenu) {
-        // Check if the click is inside the slash menu
         const target = event.target as Element
-        const slashMenu = document.querySelector("[data-slash-menu]")
-
-        if (slashMenu && slashMenu.contains(target)) {
-          // Click is inside the menu, don't close it
-          return
+        if (!target.closest("[data-slash-menu]")) {
+          actions.hideSlashMenu()
         }
-
-        actions.hideSlashMenu()
       }
     }
 
@@ -417,89 +253,276 @@ export default function WritiEditor() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [editorState.showSlashMenu, actions])
 
+  // Create initial block if page is empty
+  useEffect(() => {
+    if (currentPage && blocks.length === 0 && !blocksLoading && userId) {
+      // Create a welcome block for new pages
+      createBlockInDb(undefined, "heading_1").then(blockId => {
+        if (blockId) {
+          updateBlockInDb(blockId, {
+            content: "Welcome to Writi! 🚀",
+            props: { emoji: "🚀" }
+          })
+          // Create a paragraph block below
+          setTimeout(() => {
+            createBlockInDb(blockId, "paragraph").then(paragraphId => {
+              if (paragraphId) {
+                updateBlockInDb(paragraphId, {
+                  content:
+                    "Start typing here or press '/' to add different types of content blocks..."
+                })
+              }
+            })
+          }, 100)
+        }
+      })
+    }
+  }, [
+    currentPage,
+    blocks.length,
+    blocksLoading,
+    userId,
+    createBlockInDb,
+    updateBlockInDb
+  ])
+
+  // Loading state
+  if (!userLoaded || pageLoading || (blocksLoading && blocks.length === 0)) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="flex items-center space-x-2">
+          <Loader2 className="size-4 animate-spin" />
+          <span>Loading your document...</span>
+        </div>
+      </div>
+    )
+  }
+
+  // Error states
+  if (pageError || blocksError) {
+    return (
+      <div className="p-8">
+        <Alert>
+          <AlertCircle className="size-4" />
+          <AlertDescription>{pageError || blocksError}</AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  // No user state
+  if (!userId) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-lg font-semibold">Please sign in</h2>
+          <p className="text-gray-600">
+            You need to be signed in to use the editor.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  // No page state
+  if (!currentPage) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-lg font-semibold">No page found</h2>
+          <p className="text-gray-600">Creating your first page...</p>
+          <Loader2 className="mx-auto mt-2 size-4 animate-spin" />
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       {/* Header */}
-      <div
-        className="flex items-center justify-between border-b p-6"
-        style={{ borderColor: "var(--color-border-light)" }}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between border-b bg-white px-6 py-3"
+        style={{
+          borderColor: "var(--color-border-light)",
+          minHeight: "60px"
+        }}
       >
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🧬</span>
-            <h1
-              className="text-xl font-semibold"
-              style={{
-                fontFamily: "var(--font-body)",
-                color: "var(--color-text-primary)"
+        {/* Left Section - Navigation & Title */}
+        <div className="flex items-center space-x-4">
+          {/* Navigation Arrows */}
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-8 rounded-md p-0 hover:bg-gray-100"
+            >
+              <svg
+                className="size-4 text-gray-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-8 rounded-md p-0 hover:bg-gray-100"
+            >
+              <svg
+                className="size-4 text-gray-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </Button>
+          </div>
+
+          <div className="h-6 w-px bg-gray-300" />
+
+          {/* Title Section */}
+          <div className="flex items-center space-x-3">
+            {/* Edit Icon */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-8 rounded-md p-0 hover:bg-gray-100"
+              onClick={() => {
+                // TODO: Enable title editing
+                console.log("Edit title")
               }}
             >
-              Designs
+              <svg
+                className="size-4 text-gray-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
+              </svg>
+            </Button>
+
+            {/* Page Title */}
+            <h1
+              className="cursor-pointer text-base font-medium text-gray-900 transition-colors hover:text-gray-700"
+              style={{
+                fontFamily: "var(--font-body)"
+              }}
+              onClick={() => {
+                // TODO: Enable title editing
+                console.log("Edit title")
+              }}
+            >
+              {currentPage.title}
+            </h1>
+          </div>
+        </div>
+
+        {/* Right Section - Actions */}
+        <div className="flex items-center space-x-1">
+          {/* Edited Badge */}
+          <span className="mr-4 text-sm font-medium text-gray-500">
+            Edited{" "}
+            {new Date(currentPage.updatedAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric"
+            })}
+          </span>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 rounded-md px-3 text-sm font-medium transition-colors hover:bg-gray-100"
+          >
+            Share
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="size-8 rounded-md p-0 transition-colors hover:bg-gray-100"
+            title="Comments"
+          >
+            <MessageSquare className="size-4 text-gray-600" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="size-8 rounded-md p-0 transition-colors hover:bg-gray-100"
+            title="Add to favorites"
+          >
+            <Star className="size-4 text-gray-600" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="size-8 rounded-md p-0 transition-colors hover:bg-gray-100"
+            title="More options"
+          >
+            <MoreHorizontal className="size-4 text-gray-600" />
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* Editor Content */}
+      <div className="flex-1 overflow-auto bg-white">
+        <div className="mx-auto max-w-3xl px-6 py-8">
+          {/* Page Icon & Title */}
+          <div className="mb-8">
+            <div className="mb-4 flex items-center space-x-3">
+              <span className="text-5xl" role="img" aria-label="page emoji">
+                {currentPage.emoji || "📝"}
+              </span>
+            </div>
+            <h1
+              className="mb-2 text-4xl font-bold text-gray-900 outline-none"
+              contentEditable
+              suppressContentEditableWarning={true}
+              onBlur={e => {
+                const newTitle = e.currentTarget.textContent || "Untitled"
+                if (newTitle !== currentPage.title) {
+                  updatePage({ title: newTitle })
+                }
+              }}
+              style={{
+                fontFamily: "var(--font-body)",
+                lineHeight: "1.2"
+              }}
+            >
+              {currentPage.title}
             </h1>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="secondary"
-              className="figma-text-secondary border bg-transparent"
-              style={{ borderColor: "var(--color-border-light)" }}
-            >
-              <Users className="mr-1 size-3" />
-              Shared
-            </Badge>
-            <Badge
-              variant="secondary"
-              className="figma-text-secondary border bg-transparent"
-              style={{ borderColor: "var(--color-border-light)" }}
-            >
-              <Eye className="mr-1 size-3" />
-              Published
-            </Badge>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="figma-text-secondary hover:figma-text-primary"
-          >
-            <MessageSquare className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="figma-text-secondary hover:figma-text-primary"
-          >
-            <Star className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="figma-text-secondary hover:figma-text-primary"
-          >
-            <Share className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="figma-text-secondary hover:figma-text-primary"
-          >
-            <MoreHorizontal className="size-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Editor Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-4xl px-6 py-8">
+          {/* Blocks Content */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
             className="space-y-1"
           >
-            {editorState.blocks.map(block => (
+            {blocks.map(block => (
               <BlockRenderer
                 key={block.id}
                 block={block}
@@ -508,19 +531,57 @@ export default function WritiEditor() {
                 isSelected={editorState.selectedBlockIds.includes(block.id)}
               />
             ))}
-          </motion.div>
 
-          {/* Add new block button */}
-          <div className="mt-4">
-            <Button
-              variant="ghost"
-              className="figma-text-secondary hover:figma-text-primary w-full justify-start opacity-0 transition-opacity hover:opacity-100"
-              onClick={() => actions.createBlock()}
+            {/* Empty state */}
+            {blocks.length === 0 && !blocksLoading && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="py-16 text-center text-gray-500"
+              >
+                <div className="space-y-3">
+                  <div className="text-4xl">✍️</div>
+                  <div>
+                    <p className="text-lg font-medium text-gray-600">
+                      Start writing...
+                    </p>
+                    <p className="mt-1 text-sm text-gray-400">
+                      Press '/' for commands, or just start typing
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Add new block area */}
+            <div
+              className="group cursor-text py-4"
+              onClick={() => {
+                if (blocks.length > 0) {
+                  actions.createBlock(blocks[blocks.length - 1].id, "paragraph")
+                } else {
+                  actions.createBlock(undefined, "paragraph")
+                }
+              }}
             >
-              <span className="mr-2 text-lg">+</span>
-              Add a block
-            </Button>
-          </div>
+              <div className="flex items-center text-gray-400 opacity-0 transition-opacity group-hover:opacity-100">
+                <svg
+                  className="mr-2 size-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                <span className="text-sm">Add a block</span>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </div>
 
@@ -529,9 +590,9 @@ export default function WritiEditor() {
         isOpen={editorState.showSlashMenu}
         position={editorState.slashMenuPosition}
         query={editorState.slashMenuQuery}
-        onQueryChange={query =>
+        onQueryChange={query => {
           setEditorState(prev => ({ ...prev, slashMenuQuery: query }))
-        }
+        }}
         onSelectCommand={command => {
           if (editorState.focusedBlockId) {
             actions.executeSlashCommand(command, editorState.focusedBlockId)
@@ -539,6 +600,16 @@ export default function WritiEditor() {
         }}
         onClose={actions.hideSlashMenu}
       />
+
+      {/* Loading indicator for block operations */}
+      {blocksLoading && blocks.length > 0 && (
+        <div className="fixed bottom-4 right-4">
+          <div className="flex items-center space-x-2 rounded-lg border bg-white p-2 shadow-lg">
+            <Loader2 className="size-3 animate-spin" />
+            <span className="text-xs">Saving...</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

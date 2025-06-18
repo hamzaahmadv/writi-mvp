@@ -60,15 +60,15 @@ export interface SlashCommand {
 }
 
 export interface EditorActions {
-  createBlock: (afterId?: string, type?: BlockType) => string
-  updateBlock: (id: string, updates: Partial<Block>) => void
-  deleteBlock: (id: string) => void
-  duplicateBlock: (id: string) => void
+  createBlock: (afterId?: string, type?: BlockType) => Promise<string | null>
+  updateBlock: (id: string, updates: Partial<Block>) => Promise<void>
+  deleteBlock: (id: string) => Promise<void>
+  duplicateBlock: (id: string) => Promise<void>
   moveBlock: (
     dragId: string,
     hoverId: string,
     position: "before" | "after"
-  ) => void
+  ) => Promise<void>
   indentBlock: (id: string) => void
   unindentBlock: (id: string) => void
   focusBlock: (id: string) => void

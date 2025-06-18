@@ -129,29 +129,18 @@ export function SlashCommandMenu({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.95 }}
         transition={{ duration: 0.15 }}
-        className="fixed z-50 rounded-lg border shadow-lg"
-        style={{
-          ...getMenuStyle(),
-          backgroundColor: "var(--color-bg-secondary)",
-          borderColor: "var(--color-border-light)"
-        }}
+        className="fixed z-50 rounded-lg border border-gray-200 bg-white shadow-xl backdrop-blur-sm"
+        style={getMenuStyle()}
       >
         <Command className="bg-transparent">
           <CommandInput
-            placeholder="Type to filter..."
+            placeholder="Type to filter blocks..."
             value={query}
             onValueChange={onQueryChange}
-            className="border-0 border-b"
-            style={{
-              borderBottomColor: "var(--color-border-light)",
-              fontFamily: "var(--font-body)"
-            }}
+            className="border-0 border-b border-gray-100 p-3 text-sm focus:ring-0"
           />
           <CommandList className="max-h-80 overflow-y-auto">
-            <CommandEmpty
-              className="figma-text-secondary py-6 text-center"
-              style={{ fontFamily: "var(--font-body)" }}
-            >
+            <CommandEmpty className="py-6 text-center text-sm text-gray-500">
               No blocks found.
             </CommandEmpty>
             <CommandGroup>
@@ -163,43 +152,25 @@ export function SlashCommandMenu({
                     value={command.label}
                     onSelect={() => onSelectCommand(command)}
                     className={`
-                      flex cursor-pointer items-center gap-3 rounded-md p-3 transition-colors
-                      ${index === selectedIndex ? "bg-blue-50" : "hover:bg-gray-50"}
+                      mx-2 my-1 flex cursor-pointer items-center gap-3 rounded-md p-3 transition-all duration-150
+                      ${index === selectedIndex ? "bg-blue-50 shadow-sm" : "hover:bg-gray-50"}
                     `}
                   >
-                    <div
-                      className="flex size-8 shrink-0 items-center justify-center rounded-md"
-                      style={{ backgroundColor: "var(--color-bg-tertiary)" }}
-                    >
-                      <IconComponent className="figma-text-secondary size-4" />
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-gray-100">
+                      <IconComponent className="size-4 text-gray-600" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div
-                        className="font-medium"
-                        style={{
-                          fontFamily: "var(--font-body)",
-                          color: "var(--color-text-primary)"
-                        }}
-                      >
+                      <div className="font-medium text-gray-900">
                         {command.label}
                       </div>
                       {command.description && (
-                        <div
-                          className="figma-text-secondary mt-0.5 text-sm"
-                          style={{ fontFamily: "var(--font-body)" }}
-                        >
+                        <div className="mt-0.5 text-sm text-gray-500">
                           {command.description}
                         </div>
                       )}
                     </div>
                     {command.shortcut && (
-                      <div
-                        className="figma-text-secondary rounded px-2 py-1 text-xs"
-                        style={{
-                          backgroundColor: "var(--color-bg-tertiary)",
-                          fontFamily: "var(--font-body)"
-                        }}
-                      >
+                      <div className="rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-500">
                         {command.shortcut}
                       </div>
                     )}
