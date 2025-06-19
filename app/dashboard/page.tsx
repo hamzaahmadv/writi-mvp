@@ -6,6 +6,8 @@ import { DocumentSidebar } from "./_components/document-sidebar"
 import { WritiAiPanel } from "./_components/writi-ai-panel"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { usePage } from "@/lib/hooks/use-page"
+import { SelectPage } from "@/db/schema"
+import { toast } from "sonner"
 
 export default function DashboardPage() {
   // Authentication
@@ -18,11 +20,35 @@ export default function DashboardPage() {
     isLoading: pagesLoading,
     createPage,
     updatePage,
+    deletePage,
     switchPage
   } = usePage(userId)
 
   const handlePageSelect = (pageId: string) => {
     switchPage(pageId)
+  }
+
+  // Handle page duplication
+  const handleDuplicatePage = async (
+    page: SelectPage
+  ): Promise<SelectPage | null> => {
+    try {
+      const duplicatedPage = await createPage(
+        `${page.title} (Copy)`,
+        page.emoji || "📝"
+      )
+
+      if (duplicatedPage) {
+        toast.success("Page duplicated successfully")
+        return duplicatedPage
+      }
+
+      return null
+    } catch (error) {
+      toast.error("Failed to duplicate page")
+      console.error("Error duplicating page:", error)
+      return null
+    }
   }
 
   return (
@@ -36,6 +62,8 @@ export default function DashboardPage() {
           onPageSelect={handlePageSelect}
           onCreatePage={createPage}
           onUpdatePage={updatePage}
+          onDeletePage={deletePage}
+          onDuplicatePage={handleDuplicatePage}
         />
 
         {/* Main Editor Area */}

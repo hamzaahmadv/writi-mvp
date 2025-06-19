@@ -28,11 +28,25 @@ import {
   FolderOpen,
   MoreHorizontal,
   X,
-  Plus
+  Plus,
+  Star,
+  Link,
+  Copy,
+  Trash2,
+  FolderPlus,
+  StarOff
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { SelectPage } from "@/db/schema"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
+import { toast } from "sonner"
 
 interface NavItem {
   id: string
@@ -74,6 +88,8 @@ interface DocumentSidebarProps {
   onPageSelect: (pageId: string) => void
   onCreatePage: (title?: string, emoji?: string) => Promise<SelectPage | null>
   onUpdatePage: (updates: Partial<SelectPage>) => Promise<void>
+  onDeletePage?: (pageId: string) => Promise<void>
+  onDuplicatePage?: (page: SelectPage) => Promise<SelectPage | null>
 }
 
 export function DocumentSidebar({
@@ -82,7 +98,9 @@ export function DocumentSidebar({
   isLoading: pagesLoading,
   onPageSelect,
   onCreatePage,
-  onUpdatePage
+  onUpdatePage,
+  onDeletePage,
+  onDuplicatePage
 }: DocumentSidebarProps) {
   const [essentialsExpanded, setEssentialsExpanded] = useState(true)
   const [documentsExpanded, setDocumentsExpanded] = useState(true)
@@ -91,6 +109,8 @@ export function DocumentSidebar({
   const [showMessage, setShowMessage] = useState(true)
   const [editingPageId, setEditingPageId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState("")
+  const [favorites, setFavorites] = useState<Set<string>>(new Set())
+  const [isCreatingPage, setIsCreatingPage] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -125,6 +145,7 @@ export function DocumentSidebar({
 
         // Update the page title
         await onUpdatePage({ title: trimmedTitle })
+        toast.success("Page renamed successfully")
       }
     }
     setEditingPageId(null)
@@ -136,11 +157,104 @@ export function DocumentSidebar({
     setEditingTitle("")
   }
 
-  // Handle creating new page
+  // Handle creating new page with animation
   const handleCreatePage = async () => {
-    const newPage = await onCreatePage("Untitled", "📝")
-    if (newPage) {
-      handlePageSelect(newPage.id)
+    if (isCreatingPage) return
+
+    setIsCreatingPage(true)
+    try {
+      const newPage = await onCreatePage("Untitled", "📝")
+      if (newPage) {
+        handlePageSelect(newPage.id)
+        toast.success("New page created")
+        // Auto-start editing the title
+        setTimeout(() => {
+          startEditing(newPage)
+        }, 100)
+      }
+    } catch (error) {
+      toast.error("Failed to create page")
+      console.error("Error creating page:", error)
+    } finally {
+      setIsCreatingPage(false)
+    }
+  }
+
+  // Page action handlers
+  const handleToggleFavorite = async (page: SelectPage) => {
+    const isFavorited = favorites.has(page.id)
+    const newFavorites = new Set(favorites)
+
+    if (isFavorited) {
+      newFavorites.delete(page.id)
+      toast.success("Removed from favorites")
+    } else {
+      newFavorites.add(page.id)
+      toast.success("Added to favorites")
+    }
+
+    setFavorites(newFavorites)
+
+    // Update page with favorite status
+    await onUpdatePage({
+      ...page
+      // You might want to add a favorites field to your schema
+      // For now, we'll store it locally
+    })
+  }
+
+  const handleCopyLink = async (page: SelectPage) => {
+    try {
+      const url = `${window.location.origin}/dashboard?page=${page.id}`
+      await navigator.clipboard.writeText(url)
+      toast.success("Link copied to clipboard")
+    } catch (error) {
+      toast.error("Failed to copy link")
+    }
+  }
+
+  const handleDuplicatePage = async (page: SelectPage) => {
+    if (onDuplicatePage) {
+      try {
+        const duplicatedPage = await onDuplicatePage(page)
+        if (duplicatedPage) {
+          handlePageSelect(duplicatedPage.id)
+          toast.success("Page duplicated successfully")
+        }
+      } catch (error) {
+        toast.error("Failed to duplicate page")
+        console.error("Error duplicating page:", error)
+      }
+    }
+  }
+
+  const handleRenamePage = (page: SelectPage) => {
+    startEditing(page)
+  }
+
+  const handleMoveTo = (page: SelectPage) => {
+    // For now, we'll just show a placeholder toast
+    // You can implement a folder selection modal here
+    toast.info("Move to folder feature coming soon")
+  }
+
+  const handleMoveToTrash = async (page: SelectPage) => {
+    if (onDeletePage) {
+      try {
+        await onDeletePage(page.id)
+        toast.success("Page moved to trash")
+
+        // If this was the current page, switch to another page
+        if (currentPage?.id === page.id && pages.length > 1) {
+          const otherPage = pages.find(p => p.id !== page.id)
+          if (otherPage) {
+            handlePageSelect(otherPage.id)
+          }
+        }
+      } catch (error) {
+        toast.error("Failed to move page to trash")
+        console.error("Error deleting page:", error)
+      }
     }
   }
 
@@ -205,13 +319,18 @@ export function DocumentSidebar({
   const PageItemComponent = ({ page }: { page: SelectPage }) => {
     const isSelected = currentPage?.id === page.id
     const isEditing = editingPageId === page.id
+    const isFavorited = favorites.has(page.id)
 
     return (
       <div className="group relative">
         <div
           className={`
             mx-2 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200
-            hover:bg-gray-100 ${isSelected ? "border border-blue-200 bg-blue-50 text-gray-900" : "text-gray-600"}
+            hover:bg-gray-100 ${
+              isSelected
+                ? "border border-blue-200 bg-blue-50 text-gray-900"
+                : "text-gray-600"
+            }
           `}
         >
           <span className="shrink-0 text-sm">{page.emoji || "📝"}</span>
@@ -236,12 +355,18 @@ export function DocumentSidebar({
               className="min-w-0 flex-1"
               onClick={() => handlePageSelect(page.id)}
             >
-              <div className="truncate text-sm font-medium">{page.title}</div>
+              <div className="flex items-center gap-2">
+                <div className="truncate text-sm font-medium">{page.title}</div>
+                {isFavorited && (
+                  <Star className="size-3 fill-yellow-400 text-yellow-400" />
+                )}
+              </div>
             </div>
           )}
 
-          {!isEditing && isSelected && (
-            <div className="opacity-0 transition-opacity group-hover:opacity-100">
+          {!isEditing && (
+            <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              {/* Quick Edit Button */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -250,10 +375,89 @@ export function DocumentSidebar({
                   e.stopPropagation()
                   startEditing(page)
                 }}
-                title="Edit page title"
+                title="Rename"
               >
                 <Edit className="size-3" />
               </Button>
+
+              {/* 3-Dot Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-6 p-0 text-gray-500 hover:text-gray-700"
+                    onClick={e => e.stopPropagation()}
+                    title="More options"
+                  >
+                    <MoreHorizontal className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+                  sideOffset={4}
+                >
+                  <DropdownMenuItem
+                    onClick={() => handleToggleFavorite(page)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                  >
+                    {isFavorited ? (
+                      <>
+                        <StarOff className="size-4 text-black" />
+                        Remove from Favorites
+                      </>
+                    ) : (
+                      <>
+                        <Star className="size-4 text-black" />
+                        Add to Favorites
+                      </>
+                    )}
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    onClick={() => handleCopyLink(page)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                  >
+                    <Link className="size-4 text-black" />
+                    Copy Link
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    onClick={() => handleDuplicatePage(page)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                  >
+                    <Copy className="size-4 text-black" />
+                    Duplicate
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    onClick={() => handleRenamePage(page)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                  >
+                    <Edit className="size-4 text-black" />
+                    Rename
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    onClick={() => handleMoveTo(page)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                  >
+                    <FolderPlus className="size-4 text-black" />
+                    Move to
+                  </DropdownMenuItem>
+
+                  <DropdownMenuSeparator className="my-1 border-gray-200" />
+
+                  <DropdownMenuItem
+                    onClick={() => handleMoveToTrash(page)}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 hover:text-red-600 focus:bg-red-50 focus:text-red-600"
+                  >
+                    <Trash2 className="size-4 text-red-600" />
+                    Move to Trash
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
         </div>
@@ -266,24 +470,27 @@ export function DocumentSidebar({
     isExpanded,
     onToggle,
     showAddButton = false,
-    onAdd
+    onAdd,
+    isLoading = false
   }: {
     title: string
     isExpanded: boolean
     onToggle: () => void
     showAddButton?: boolean
     onAdd?: () => void
+    isLoading?: boolean
   }) => (
-    <div className="mx-2 flex items-center justify-between rounded-md px-3 py-1">
+    <div className="group mx-2 flex items-center justify-between rounded-md px-3 py-1">
       <div
         className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors hover:bg-gray-50"
         onClick={onToggle}
       >
-        {isExpanded ? (
+        <motion.div
+          animate={{ rotate: isExpanded ? 0 : -90 }}
+          transition={{ duration: 0.2 }}
+        >
           <ChevronDown className="figma-text-secondary size-3" />
-        ) : (
-          <ChevronRight className="figma-text-secondary size-3" />
-        )}
+        </motion.div>
         <span
           className="figma-text-secondary text-xs uppercase tracking-wide"
           style={{
@@ -297,14 +504,32 @@ export function DocumentSidebar({
       </div>
 
       {showAddButton && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="size-6 p-0 text-gray-400 hover:text-gray-600"
-          onClick={onAdd}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
         >
-          <Plus className="size-3" />
-        </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="size-6 p-0 text-gray-400 opacity-0 transition-opacity hover:text-gray-600 group-hover:opacity-100"
+            onClick={onAdd}
+            disabled={isLoading}
+            title="Add new page"
+          >
+            {isLoading ? (
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+              >
+                <Plus className="size-3" />
+              </motion.div>
+            ) : (
+              <Plus className="size-3" />
+            )}
+          </Button>
+        </motion.div>
       )}
     </div>
   )
@@ -399,6 +624,7 @@ export function DocumentSidebar({
             onToggle={() => setDocumentsExpanded(!documentsExpanded)}
             showAddButton={true}
             onAdd={handleCreatePage}
+            isLoading={isCreatingPage}
           />
           <AnimatePresence>
             {documentsExpanded && (
@@ -406,21 +632,93 @@ export function DocumentSidebar({
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.3, ease: "easeInOut" }}
                 className="space-y-1 overflow-hidden p-2"
               >
                 {pagesLoading ? (
-                  <div className="px-5 py-2 text-sm text-gray-500">
-                    Loading documents...
-                  </div>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="px-5 py-3 text-center"
+                  >
+                    <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 1,
+                          repeat: Infinity,
+                          ease: "linear"
+                        }}
+                      >
+                        <FileText className="size-4" />
+                      </motion.div>
+                      Loading documents...
+                    </div>
+                  </motion.div>
                 ) : pages.length > 0 ? (
-                  pages.map(page => (
-                    <PageItemComponent key={page.id} page={page} />
-                  ))
+                  <motion.div layout className="space-y-1">
+                    {pages.map((page, index) => (
+                      <motion.div
+                        key={page.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ delay: index * 0.05, duration: 0.2 }}
+                        layout
+                      >
+                        <PageItemComponent page={page} />
+                      </motion.div>
+                    ))}
+                  </motion.div>
                 ) : (
-                  <div className="px-5 py-2 text-sm text-gray-500">
-                    No documents yet
-                  </div>
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="px-5 py-8 text-center"
+                  >
+                    <div className="space-y-3">
+                      <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-gray-100">
+                        <FileText className="size-6 text-gray-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">
+                          No documents yet
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Create your first document to get started
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCreatePage}
+                        disabled={isCreatingPage}
+                        className="text-xs"
+                      >
+                        {isCreatingPage ? (
+                          <>
+                            <motion.div
+                              animate={{ rotate: 360 }}
+                              transition={{
+                                duration: 1,
+                                repeat: Infinity,
+                                ease: "linear"
+                              }}
+                              className="mr-2"
+                            >
+                              <Plus className="size-3" />
+                            </motion.div>
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="mr-2 size-3" />
+                            Create Document
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </motion.div>
                 )}
               </motion.div>
             )}
