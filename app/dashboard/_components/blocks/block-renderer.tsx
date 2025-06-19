@@ -32,6 +32,7 @@ export function BlockRenderer({
   level = 0
 }: BlockRendererProps) {
   const [isToggleExpanded, setIsToggleExpanded] = useState(true)
+  const [isHovered, setIsHovered] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -162,6 +163,20 @@ export function BlockRenderer({
       selection?.removeAllRanges()
       selection?.addRange(range)
     }
+  }
+
+  // Helper function to determine if placeholder should be shown
+  const shouldShowPlaceholder = () => {
+    const isEmpty = !block.content || block.content.trim() === ""
+    const placeholderText = getBlockPlaceholder(block.type)
+
+    // For blocks that show "Type '/' for commands", only show on hover
+    if (placeholderText === "Type '/' for commands") {
+      return isEmpty && (isHovered || isFocused)
+    }
+
+    // For other block types, show placeholder normally when empty
+    return isEmpty
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -324,7 +339,7 @@ export function BlockRenderer({
         }
       },
       className: "outline-none w-full transition-colors focus:ring-0",
-      "data-placeholder": !block.content
+      "data-placeholder": shouldShowPlaceholder()
         ? getBlockPlaceholder(block.type)
         : undefined,
       "data-block-type": block.type,
@@ -386,8 +401,8 @@ export function BlockRenderer({
 
       case "bulleted_list":
         return (
-          <div className="my-1 flex items-start gap-3">
-            <div className="mt-2 size-1.5 shrink-0 rounded-full bg-gray-400" />
+          <div className="flex items-center gap-3">
+            <div className="size-1.5 shrink-0 rounded-full bg-gray-400" />
             <div
               {...commonProps}
               className={`${commonProps.className} text-gray-700`}
@@ -403,8 +418,8 @@ export function BlockRenderer({
 
       case "numbered_list":
         return (
-          <div className="my-1 flex items-start gap-3">
-            <div className="mt-0.5 min-w-[20px] shrink-0 font-medium text-gray-500">
+          <div className="flex items-center gap-3">
+            <div className="min-w-[20px] shrink-0 font-medium text-gray-500">
               1.
             </div>
             <div
@@ -422,7 +437,7 @@ export function BlockRenderer({
 
       case "toggle":
         return (
-          <div className="my-1">
+          <div>
             <div className="flex items-center gap-2">
               <div
                 className="cursor-pointer rounded p-1 transition-colors hover:bg-gray-100"
@@ -465,8 +480,8 @@ export function BlockRenderer({
 
       case "callout":
         return (
-          <div className="my-2 flex items-start gap-3 rounded-lg border-l-4 border-blue-400 bg-blue-50 p-4">
-            <AlertCircle className="mt-0.5 size-5 shrink-0 text-blue-500" />
+          <div className="flex items-center gap-3 rounded-lg border-l-4 border-blue-400 bg-blue-50 p-4">
+            <AlertCircle className="size-5 shrink-0 text-blue-500" />
             <div
               {...commonProps}
               className={`${commonProps.className} text-blue-900`}
@@ -482,7 +497,7 @@ export function BlockRenderer({
 
       case "code":
         return (
-          <div className="my-2 rounded-lg border border-gray-200 bg-gray-50 p-4 font-mono">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 font-mono">
             <div
               {...commonProps}
               className={`${commonProps.className} text-gray-800`}
@@ -501,7 +516,7 @@ export function BlockRenderer({
 
       case "quote":
         return (
-          <div className="my-2 border-l-4 border-gray-300 py-2 pl-6">
+          <div className="border-l-4 border-gray-300 py-2 pl-6">
             <div
               {...commonProps}
               className={`${commonProps.className} italic text-gray-600`}
@@ -517,7 +532,7 @@ export function BlockRenderer({
 
       case "image":
         return (
-          <div className="my-4 space-y-2">
+          <div className="space-y-2">
             {block.content ? (
               <img
                 src={block.content}
@@ -540,7 +555,7 @@ export function BlockRenderer({
 
       case "divider":
         return (
-          <div className="my-6 flex items-center">
+          <div className="flex items-center py-3">
             <div className="h-px w-full bg-gray-300" />
           </div>
         )
@@ -553,8 +568,7 @@ export function BlockRenderer({
             style={{
               ...commonProps.style,
               fontSize: "16px",
-              lineHeight: "1.6",
-              marginBottom: "0.5rem"
+              lineHeight: "1.6"
             }}
           />
         )
@@ -567,15 +581,17 @@ export function BlockRenderer({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15 }}
       className={`
-        group relative transition-all duration-150
+        group relative py-1 transition-all duration-150
         ${isFocused ? "bg-blue-50/30" : ""}
         ${isSelected ? "bg-blue-50" : "hover:bg-gray-50/30"}
       `}
       style={{ marginLeft: level > 0 ? `${level * 24}px` : undefined }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Block Controls */}
-      <div className="flex items-start gap-2">
-        <div className="flex items-center gap-1 pt-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           <Button
             variant="ghost"
             size="icon"
@@ -593,9 +609,9 @@ export function BlockRenderer({
           </Button>
         </div>
 
-        <div className="min-w-0 flex-1 py-1">{renderBlockContent()}</div>
+        <div className="min-w-0 flex-1">{renderBlockContent()}</div>
 
-        <div className="flex items-center gap-1 pt-2 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <div className="flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
           <Button
             variant="ghost"
             size="icon"

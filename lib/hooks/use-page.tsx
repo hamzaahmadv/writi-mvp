@@ -113,6 +113,15 @@ export function usePage(userId: string | null): UsePageResult {
   const updatePage = async (updates: Partial<SelectPage>) => {
     if (!currentPage || !userId) return
 
+    // Optimistic update - update UI immediately
+    const optimisticUpdatedPage = { ...currentPage, ...updates }
+    setCurrentPage(optimisticUpdatedPage)
+    setPages(prev =>
+      prev.map(page =>
+        page.id === currentPage.id ? optimisticUpdatedPage : page
+      )
+    )
+
     try {
       const result = await updatePageAction(currentPage.id, updates)
 
@@ -123,9 +132,19 @@ export function usePage(userId: string | null): UsePageResult {
           prev.map(page => (page.id === updatedPage.id ? updatedPage : page))
         )
       } else {
+        // Revert optimistic update on error
+        setCurrentPage(currentPage)
+        setPages(prev =>
+          prev.map(page => (page.id === currentPage.id ? currentPage : page))
+        )
         setError(result.message)
       }
     } catch (err) {
+      // Revert optimistic update on error
+      setCurrentPage(currentPage)
+      setPages(prev =>
+        prev.map(page => (page.id === currentPage.id ? currentPage : page))
+      )
       setError("Failed to update page")
       console.error("Error updating page:", err)
     }
