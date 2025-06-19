@@ -5,6 +5,7 @@ The root server layout for the app.
 */
 
 import { Toaster } from "@/components/ui/toaster"
+import { Toaster as SonnerToaster } from "sonner"
 import { PostHogPageview } from "@/components/utilities/posthog/posthog-pageview"
 import { PostHogUserIdentify } from "@/components/utilities/posthog/posthog-user-identity"
 import { ProfileInitializer } from "@/components/utilities/profile-initializer"
@@ -52,6 +53,15 @@ export default function RootLayout({
             <TailwindIndicator />
 
             <Toaster />
+            <SonnerToaster
+              position="bottom-right"
+              toastOptions={{
+                style: {
+                  fontFamily: "var(--font-body)"
+                },
+                className: "border border-gray-200"
+              }}
+            />
           </Providers>
         </body>
       </html>

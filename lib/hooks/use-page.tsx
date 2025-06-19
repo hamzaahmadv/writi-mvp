@@ -5,7 +5,8 @@ import { SelectPage } from "@/db/schema"
 import {
   createPageAction,
   getPagesByUserAction,
-  updatePageAction
+  updatePageAction,
+  deletePageAction
 } from "@/actions/db/pages-actions"
 
 interface UsePageResult {
@@ -15,6 +16,7 @@ interface UsePageResult {
   error: string | null
   createPage: (title?: string, emoji?: string) => Promise<SelectPage | null>
   updatePage: (updates: Partial<SelectPage>) => Promise<void>
+  deletePage: (pageId: string) => Promise<void>
   switchPage: (pageId: string) => void
   refreshPages: () => Promise<void>
 }
@@ -150,6 +152,58 @@ export function usePage(userId: string | null): UsePageResult {
     }
   }
 
+  // Delete a page
+  const deletePage = async (pageId: string) => {
+    if (!userId) return
+
+    // Optimistically remove the page from state
+    const pageToDelete = pages.find(p => p.id === pageId)
+    if (!pageToDelete) return
+
+    setPages(prev => prev.filter(p => p.id !== pageId))
+
+    // If deleting the current page, switch to another page
+    if (currentPage?.id === pageId) {
+      const remainingPages = pages.filter(p => p.id !== pageId)
+      if (remainingPages.length > 0) {
+        setCurrentPage(remainingPages[0])
+      } else {
+        setCurrentPage(null)
+      }
+    }
+
+    try {
+      const result = await deletePageAction(pageId)
+
+      if (!result.isSuccess) {
+        // Revert optimistic update on error
+        setPages(prev =>
+          [...prev, pageToDelete].sort(
+            (a, b) =>
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          )
+        )
+        if (currentPage?.id === pageId) {
+          setCurrentPage(pageToDelete)
+        }
+        setError(result.message)
+      }
+    } catch (err) {
+      // Revert optimistic update on error
+      setPages(prev =>
+        [...prev, pageToDelete].sort(
+          (a, b) =>
+            new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        )
+      )
+      if (currentPage?.id === pageId) {
+        setCurrentPage(pageToDelete)
+      }
+      setError("Failed to delete page")
+      console.error("Error deleting page:", err)
+    }
+  }
+
   // Switch to a different page
   const switchPage = (pageId: string) => {
     const page = pages.find(p => p.id === pageId)
@@ -181,6 +235,7 @@ export function usePage(userId: string | null): UsePageResult {
     error,
     createPage,
     updatePage,
+    deletePage,
     switchPage,
     refreshPages
   }
