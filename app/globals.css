@@ -135,6 +135,7 @@ Global styles for the app.
   pointer-events: none;
   font-style: normal;
   font-weight: 400;
+  transition: opacity 0.2s ease-in-out;
 }
 
 [contenteditable]:focus:empty:before {
@@ -142,6 +143,17 @@ Global styles for the app.
   color: #9CA3AF;
   opacity: 0.7;
   pointer-events: none;
+}
+
+/* Special handling for paragraph blocks - only show placeholder on hover or focus */
+[data-block-type="paragraph"]:empty:not(:focus):before {
+  opacity: 0;
+}
+
+[data-block-type="paragraph"]:empty:focus:before,
+.group:hover [data-block-type="paragraph"]:empty:before {
+  opacity: 1;
+  transition: opacity 0.2s ease-in-out;
 }
 
 /* Enhanced placeholder for different block types */

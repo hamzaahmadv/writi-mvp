@@ -26,22 +26,20 @@ import {
   SlashCommand
 } from "@/types"
 import { useCurrentUser } from "@/lib/hooks/use-user"
-import { usePage } from "@/lib/hooks/use-page"
 import { useBlocks } from "@/lib/hooks/use-blocks"
+import { SelectPage } from "@/db/schema"
 
-export default function WritiEditor() {
+interface WritiEditorProps {
+  currentPage: SelectPage | null
+  onUpdatePage: (updates: Partial<SelectPage>) => Promise<void>
+}
+
+export default function WritiEditor({
+  currentPage,
+  onUpdatePage
+}: WritiEditorProps) {
   // Authentication
   const { userId, isLoaded: userLoaded } = useCurrentUser()
-
-  // Page management
-  const {
-    currentPage,
-    pages,
-    isLoading: pageLoading,
-    error: pageError,
-    createPage,
-    updatePage
-  } = usePage(userId)
 
   // Blocks management
   const {
@@ -53,6 +51,9 @@ export default function WritiEditor() {
     deleteBlock: deleteBlockInDb,
     moveBlock: moveBlockInDb
   } = useBlocks(userId, currentPage?.id || null)
+
+  // Track if blocks have been loaded for this page to prevent duplicate welcome content
+  const [hasLoadedBlocks, setHasLoadedBlocks] = useState(false)
 
   // Local editor state for UI interactions
   const [editorState, setEditorState] = useState<EditorState>({
@@ -71,6 +72,59 @@ export default function WritiEditor() {
       blocks
     }))
   }, [blocks])
+
+  // Reset hasLoadedBlocks when page changes
+  useEffect(() => {
+    setHasLoadedBlocks(false)
+  }, [currentPage?.id])
+
+  // Track when blocks have been loaded for this page
+  useEffect(() => {
+    if (!blocksLoading && currentPage) {
+      setHasLoadedBlocks(true)
+    }
+  }, [blocksLoading, currentPage])
+
+  // Create initial block only for truly new pages (never had blocks loaded before)
+  useEffect(() => {
+    if (
+      currentPage &&
+      blocks.length === 0 &&
+      !blocksLoading &&
+      hasLoadedBlocks &&
+      userId
+    ) {
+      // Only create welcome content for pages that have been loaded and are truly empty
+      // This prevents adding content on page reloads
+      createBlockInDb(undefined, "heading_1").then(blockId => {
+        if (blockId) {
+          updateBlockInDb(blockId, {
+            content: "Welcome to Writi! 🚀",
+            props: { emoji: "🚀" }
+          })
+          // Create a paragraph block below
+          setTimeout(() => {
+            createBlockInDb(blockId, "paragraph").then(paragraphId => {
+              if (paragraphId) {
+                updateBlockInDb(paragraphId, {
+                  content:
+                    "Start typing here or press '/' to add different types of content blocks..."
+                })
+              }
+            })
+          }, 100)
+        }
+      })
+    }
+  }, [
+    currentPage,
+    blocks.length,
+    blocksLoading,
+    hasLoadedBlocks,
+    userId,
+    createBlockInDb,
+    updateBlockInDb
+  ])
 
   // Find block by ID (supports nested blocks)
   const findBlock = useCallback(
@@ -253,41 +307,8 @@ export default function WritiEditor() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [editorState.showSlashMenu, actions])
 
-  // Create initial block if page is empty
-  useEffect(() => {
-    if (currentPage && blocks.length === 0 && !blocksLoading && userId) {
-      // Create a welcome block for new pages
-      createBlockInDb(undefined, "heading_1").then(blockId => {
-        if (blockId) {
-          updateBlockInDb(blockId, {
-            content: "Welcome to Writi! 🚀",
-            props: { emoji: "🚀" }
-          })
-          // Create a paragraph block below
-          setTimeout(() => {
-            createBlockInDb(blockId, "paragraph").then(paragraphId => {
-              if (paragraphId) {
-                updateBlockInDb(paragraphId, {
-                  content:
-                    "Start typing here or press '/' to add different types of content blocks..."
-                })
-              }
-            })
-          }, 100)
-        }
-      })
-    }
-  }, [
-    currentPage,
-    blocks.length,
-    blocksLoading,
-    userId,
-    createBlockInDb,
-    updateBlockInDb
-  ])
-
   // Loading state
-  if (!userLoaded || pageLoading || (blocksLoading && blocks.length === 0)) {
+  if (!userLoaded || (blocksLoading && blocks.length === 0)) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="flex items-center space-x-2">
@@ -299,12 +320,12 @@ export default function WritiEditor() {
   }
 
   // Error states
-  if (pageError || blocksError) {
+  if (blocksError) {
     return (
       <div className="p-8">
         <Alert>
           <AlertCircle className="size-4" />
-          <AlertDescription>{pageError || blocksError}</AlertDescription>
+          <AlertDescription>{blocksError}</AlertDescription>
         </Alert>
       </div>
     )
@@ -503,7 +524,7 @@ export default function WritiEditor() {
               onBlur={e => {
                 const newTitle = e.currentTarget.textContent || "Untitled"
                 if (newTitle !== currentPage.title) {
-                  updatePage({ title: newTitle })
+                  onUpdatePage({ title: newTitle })
                 }
               }}
               style={{

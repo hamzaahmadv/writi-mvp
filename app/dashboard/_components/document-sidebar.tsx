@@ -27,10 +27,12 @@ import {
   Flag,
   FolderOpen,
   MoreHorizontal,
-  X
+  X,
+  Plus
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SelectPage } from "@/db/schema"
 
 interface NavItem {
   id: string
@@ -54,20 +56,7 @@ const navigationItems: NavItem[] = [
 
 const essentialsItems: NavItem[] = [
   { id: "todo", title: "to-do list / planner", icon: FileText },
-  { id: "designs", title: "Designs", icon: Edit, isActive: true },
   { id: "getting-started", title: "Getting started", icon: Monitor }
-]
-
-const documentsItems: NavItem[] = [
-  { id: "reading-list", title: "Reading List", icon: BookOpen },
-  { id: "tasks", title: "Tasks", icon: CheckSquare, hasCheckmark: true },
-  {
-    id: "travel-plans",
-    title: "Travel plans 2025",
-    icon: Flag,
-    iconColor: "figma-accent-blue"
-  },
-  { id: "misc", title: "Misc", icon: Package, iconColor: "figma-accent-yellow" }
 ]
 
 const footerItems: NavItem[] = [
@@ -78,16 +67,89 @@ const footerItems: NavItem[] = [
   { id: "templates", title: "Templates", icon: Layout }
 ]
 
-export function DocumentSidebar() {
+interface DocumentSidebarProps {
+  currentPage: SelectPage | null
+  pages: SelectPage[]
+  isLoading: boolean
+  onPageSelect: (pageId: string) => void
+  onCreatePage: (title?: string, emoji?: string) => Promise<SelectPage | null>
+  onUpdatePage: (updates: Partial<SelectPage>) => Promise<void>
+}
+
+export function DocumentSidebar({
+  currentPage,
+  pages,
+  isLoading: pagesLoading,
+  onPageSelect,
+  onCreatePage,
+  onUpdatePage
+}: DocumentSidebarProps) {
   const [essentialsExpanded, setEssentialsExpanded] = useState(true)
   const [documentsExpanded, setDocumentsExpanded] = useState(true)
   const [selectedItem, setSelectedItem] = useState("designs")
   const [mounted, setMounted] = useState(false)
   const [showMessage, setShowMessage] = useState(true)
+  const [editingPageId, setEditingPageId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState("")
 
   useEffect(() => {
     setMounted(true)
   }, [])
+
+  // Handle page selection
+  const handlePageSelect = (pageId: string) => {
+    onPageSelect(pageId)
+    setSelectedItem(`page-${pageId}`)
+  }
+
+  // Handle page title editing
+  const startEditing = (page: SelectPage) => {
+    setEditingPageId(page.id)
+    setEditingTitle(page.title)
+  }
+
+  const saveTitle = async (pageId: string) => {
+    if (
+      editingTitle.trim() &&
+      editingTitle !== pages.find(p => p.id === pageId)?.title
+    ) {
+      const trimmedTitle = editingTitle.trim()
+
+      // Find the page being edited
+      const page = pages.find(p => p.id === pageId)
+      if (page) {
+        // Switch to the page being edited to ensure it becomes current
+        if (currentPage?.id !== pageId) {
+          onPageSelect(pageId)
+        }
+
+        // Update the page title
+        await onUpdatePage({ title: trimmedTitle })
+      }
+    }
+    setEditingPageId(null)
+    setEditingTitle("")
+  }
+
+  const cancelEditing = () => {
+    setEditingPageId(null)
+    setEditingTitle("")
+  }
+
+  // Handle creating new page
+  const handleCreatePage = async () => {
+    const newPage = await onCreatePage("Untitled", "📝")
+    if (newPage) {
+      handlePageSelect(newPage.id)
+    }
+  }
+
+  // Update selected item when current page changes
+  useEffect(() => {
+    if (currentPage) {
+      setSelectedItem(`page-${currentPage.id}`)
+    }
+  }, [currentPage])
 
   const NavItemComponent = ({
     item,
@@ -98,12 +160,7 @@ export function DocumentSidebar() {
     level?: number
     isMainNav?: boolean
   }) => (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3, delay: level * 0.05 }}
-      className="relative"
-    >
+    <div className="relative">
       <div
         className={`
           mx-2 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200
@@ -142,37 +199,113 @@ export function DocumentSidebar() {
           <MoreHorizontal className="size-4 text-gray-500" />
         )}
       </div>
-    </motion.div>
+    </div>
   )
+
+  const PageItemComponent = ({ page }: { page: SelectPage }) => {
+    const isSelected = currentPage?.id === page.id
+    const isEditing = editingPageId === page.id
+
+    return (
+      <div className="group relative">
+        <div
+          className={`
+            mx-2 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200
+            hover:bg-gray-100 ${isSelected ? "border border-blue-200 bg-blue-50 text-gray-900" : "text-gray-600"}
+          `}
+        >
+          <span className="shrink-0 text-sm">{page.emoji || "📝"}</span>
+
+          {isEditing ? (
+            <Input
+              value={editingTitle}
+              onChange={e => setEditingTitle(e.target.value)}
+              onBlur={() => saveTitle(page.id)}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  saveTitle(page.id)
+                } else if (e.key === "Escape") {
+                  cancelEditing()
+                }
+              }}
+              className="h-6 flex-1 border-none bg-transparent p-0 text-sm shadow-none focus:ring-0"
+              autoFocus
+            />
+          ) : (
+            <div
+              className="min-w-0 flex-1"
+              onClick={() => handlePageSelect(page.id)}
+            >
+              <div className="truncate text-sm font-medium">{page.title}</div>
+            </div>
+          )}
+
+          {!isEditing && isSelected && (
+            <div className="opacity-0 transition-opacity group-hover:opacity-100">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-6 p-0 text-gray-500 hover:text-gray-700"
+                onClick={e => {
+                  e.stopPropagation()
+                  startEditing(page)
+                }}
+                title="Edit page title"
+              >
+                <Edit className="size-3" />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   const SectionHeader = ({
     title,
     isExpanded,
-    onToggle
+    onToggle,
+    showAddButton = false,
+    onAdd
   }: {
     title: string
     isExpanded: boolean
     onToggle: () => void
+    showAddButton?: boolean
+    onAdd?: () => void
   }) => (
-    <div
-      className="mx-2 flex cursor-pointer items-center gap-2 rounded-md px-3 py-1 transition-colors hover:bg-gray-50"
-      onClick={onToggle}
-    >
-      {isExpanded ? (
-        <ChevronDown className="figma-text-secondary size-3" />
-      ) : (
-        <ChevronRight className="figma-text-secondary size-3" />
-      )}
-      <span
-        className="figma-text-secondary text-xs uppercase tracking-wide"
-        style={{
-          fontFamily: "var(--font-body)",
-          fontWeight: 500,
-          fontSize: "11px"
-        }}
+    <div className="mx-2 flex items-center justify-between rounded-md px-3 py-1">
+      <div
+        className="flex cursor-pointer items-center gap-2 rounded p-1 transition-colors hover:bg-gray-50"
+        onClick={onToggle}
       >
-        {title}
-      </span>
+        {isExpanded ? (
+          <ChevronDown className="figma-text-secondary size-3" />
+        ) : (
+          <ChevronRight className="figma-text-secondary size-3" />
+        )}
+        <span
+          className="figma-text-secondary text-xs uppercase tracking-wide"
+          style={{
+            fontFamily: "var(--font-body)",
+            fontWeight: 500,
+            fontSize: "11px"
+          }}
+        >
+          {title}
+        </span>
+      </div>
+
+      {showAddButton && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="size-6 p-0 text-gray-400 hover:text-gray-600"
+          onClick={onAdd}
+        >
+          <Plus className="size-3" />
+        </Button>
+      )}
     </div>
   )
 
@@ -264,6 +397,8 @@ export function DocumentSidebar() {
             title="Documents"
             isExpanded={documentsExpanded}
             onToggle={() => setDocumentsExpanded(!documentsExpanded)}
+            showAddButton={true}
+            onAdd={handleCreatePage}
           />
           <AnimatePresence>
             {documentsExpanded && (
@@ -274,9 +409,19 @@ export function DocumentSidebar() {
                 transition={{ duration: 0.2 }}
                 className="space-y-1 overflow-hidden p-2"
               >
-                {documentsItems.map(item => (
-                  <NavItemComponent key={item.id} item={item} />
-                ))}
+                {pagesLoading ? (
+                  <div className="px-5 py-2 text-sm text-gray-500">
+                    Loading documents...
+                  </div>
+                ) : pages.length > 0 ? (
+                  pages.map(page => (
+                    <PageItemComponent key={page.id} page={page} />
+                  ))
+                ) : (
+                  <div className="px-5 py-2 text-sm text-gray-500">
+                    No documents yet
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
