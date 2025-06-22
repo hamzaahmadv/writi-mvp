@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { BlockRenderer } from "./blocks/block-renderer"
+import { DraggableBlockList } from "./blocks/draggable-block-list"
 import { SlashCommandMenu } from "./blocks/slash-command-menu"
 import {
   Block,
@@ -242,6 +243,19 @@ export default function WritiEditor({
       })
     },
     [saveEssentialBlocks]
+  )
+
+  // Handle block moving for drag and drop
+  const handleMoveBlock = useCallback(
+    (dragId: string, hoverId: string, position: "before" | "after") => {
+      // Call the existing moveBlock action
+      if (isEssential) {
+        moveEssentialBlock(dragId, hoverId, position)
+      } else {
+        moveBlockInDb(dragId, hoverId, position)
+      }
+    },
+    [isEssential, moveEssentialBlock, moveBlockInDb]
   )
 
   // Clean up duplicate welcome blocks if they exist
@@ -834,64 +848,59 @@ export default function WritiEditor({
           </div>
 
           {/* Blocks Content */}
-          <div className="space-y-1">
-            {currentBlocks.map(block => (
-              <BlockRenderer
-                key={block.id}
-                block={block}
-                actions={actions}
-                isFocused={editorState.focusedBlockId === block.id}
-                isSelected={editorState.selectedBlockIds.includes(block.id)}
-              />
-            ))}
+          <DraggableBlockList
+            blocks={currentBlocks}
+            actions={actions}
+            editorState={editorState}
+            onMoveBlock={handleMoveBlock}
+          />
 
-            {/* Empty state */}
-            {currentBlocks.length === 0 && !currentBlocksLoading && (
-              <div className="py-16 text-center text-gray-500">
-                <div className="space-y-3">
-                  <div className="text-4xl">✍️</div>
-                  <div>
-                    <p className="text-lg font-medium text-gray-600">
-                      Start writing...
-                    </p>
-                    <p className="mt-1 text-sm text-gray-400">
-                      Press '/' for commands, or just start typing
-                    </p>
-                  </div>
+          {/* Empty state */}
+          {currentBlocks.length === 0 && !currentBlocksLoading && (
+            <div className="py-16 text-center text-gray-500">
+              <div className="space-y-3">
+                <div className="text-4xl">✍️</div>
+                <div>
+                  <p className="text-lg font-medium text-gray-600">
+                    Start writing...
+                  </p>
+                  <p className="mt-1 text-sm text-gray-400">
+                    Press '/' for commands, or just start typing
+                  </p>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Add new block area */}
-            <div
-              className="group cursor-text py-4"
-              onClick={() => {
-                if (currentBlocks.length > 0) {
-                  actions.createBlock(
-                    currentBlocks[currentBlocks.length - 1].id,
-                    "paragraph"
-                  )
-                } else {
-                  actions.createBlock(undefined, "paragraph")
-                }
-              }}
-            >
-              <div className="flex items-center text-gray-400 opacity-0 transition-opacity group-hover:opacity-100">
-                <svg
-                  className="mr-2 size-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                <span className="text-sm">Add a block</span>
-              </div>
+          {/* Add new block area */}
+          <div
+            className="group cursor-text py-4"
+            onClick={() => {
+              if (currentBlocks.length > 0) {
+                actions.createBlock(
+                  currentBlocks[currentBlocks.length - 1].id,
+                  "paragraph"
+                )
+              } else {
+                actions.createBlock(undefined, "paragraph")
+              }
+            }}
+          >
+            <div className="flex items-center text-gray-400 opacity-0 transition-opacity group-hover:opacity-100">
+              <svg
+                className="mr-2 size-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 4v16m8-8H4"
+                />
+              </svg>
+              <span className="text-sm">Add a block</span>
             </div>
           </div>
         </div>

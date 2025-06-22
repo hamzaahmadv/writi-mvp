@@ -151,10 +151,16 @@ export function SlashCommandMenu({
                     key={command.id}
                     value={command.label}
                     onSelect={() => onSelectCommand(command)}
-                    className={`
-                      mx-2 my-1 flex cursor-pointer items-center gap-3 rounded-md p-3 transition-all duration-150
-                      ${index === selectedIndex ? "bg-blue-50 shadow-sm" : "hover:bg-gray-50"}
-                    `}
+                    className="mx-2 my-1 flex cursor-pointer items-center gap-3 rounded-md p-3 transition-all duration-150 hover:bg-gray-100 aria-selected:bg-transparent data-[selected=true]:bg-transparent [&[aria-selected=true]]:bg-transparent [&[data-selected=true]]:bg-transparent"
+                    style={{
+                      backgroundColor: "transparent"
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.backgroundColor = "rgb(243 244 246)" // gray-100
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.backgroundColor = "transparent"
+                    }}
                   >
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-gray-100">
                       <IconComponent className="size-4 text-gray-600" />

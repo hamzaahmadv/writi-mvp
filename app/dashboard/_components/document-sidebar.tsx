@@ -47,6 +47,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
+import { UserProfileDropdown } from "./user-profile-dropdown"
 
 interface NavItem {
   id: string
@@ -890,40 +891,12 @@ export function DocumentSidebar({
         </div>
       )}
 
-      {/* User Section */}
+      {/* User Profile Section */}
       <div
-        className="p-4"
+        className="p-2"
         style={{ borderTop: "1px solid var(--color-border-light)" }}
       >
-        <div className="flex items-center gap-3">
-          <div
-            className="flex size-8 items-center justify-center rounded-full"
-            style={{ backgroundColor: "var(--color-text-secondary)" }}
-          >
-            <span
-              className="text-sm text-white"
-              style={{
-                fontFamily: "var(--font-body)",
-                fontWeight: "var(--font-weight-semibold)",
-                fontSize: "14px"
-              }}
-            >
-              H
-            </span>
-          </div>
-          <div className="flex-1">
-            <div
-              className="figma-text-primary text-sm"
-              style={{
-                fontFamily: "var(--font-body)",
-                fontWeight: "var(--font-weight-semibold)",
-                fontSize: "14px"
-              }}
-            >
-              Hamza Ahmad
-            </div>
-          </div>
-        </div>
+        <UserProfileDropdown />
       </div>
     </div>
   )

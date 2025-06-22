@@ -12,6 +12,8 @@ import {
   AlertCircle,
   Image as ImageIcon
 } from "lucide-react"
+import { useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Block, BlockType, EditorActions } from "@/types"
 import { getBlockPlaceholder } from "@/lib/block-configs"
@@ -37,6 +39,28 @@ export function BlockRenderer({
   const isComposingRef = useRef(false)
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastContentRef = useRef(block.content)
+
+  // Drag and drop functionality
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({
+    id: block.id,
+    data: {
+      type: "block",
+      block
+    }
+  })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1
+  }
 
   // Update DOM content when block content changes externally (but not during composition or active typing)
   useEffect(() => {
@@ -577,6 +601,7 @@ export function BlockRenderer({
 
   return (
     <motion.div
+      ref={setNodeRef}
       initial={{ opacity: 0, y: 2 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.15 }}
@@ -584,8 +609,12 @@ export function BlockRenderer({
         group relative py-1 transition-all duration-150
         ${isFocused ? "bg-blue-50/30" : ""}
         ${isSelected ? "bg-blue-50" : "hover:bg-gray-50/30"}
+        ${isDragging ? "z-50" : ""}
       `}
-      style={{ marginLeft: level > 0 ? `${level * 24}px` : undefined }}
+      style={{
+        marginLeft: level > 0 ? `${level * 24}px` : undefined,
+        ...style
+      }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -596,6 +625,8 @@ export function BlockRenderer({
             variant="ghost"
             size="icon"
             className="size-6 cursor-grab p-0 text-gray-400 hover:text-gray-600 active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
           >
             <GripVertical className="size-3" />
           </Button>
