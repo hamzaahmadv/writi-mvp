@@ -27,7 +27,7 @@ export function usePage(userId: string | null): UsePageResult {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Load user's pages
+  // Load user's pages with optimized speed
   const loadPages = async () => {
     if (!userId) return
 
@@ -38,35 +38,78 @@ export function usePage(userId: string | null): UsePageResult {
       const result = await getPagesByUserAction(userId)
 
       if (result.isSuccess) {
-        setPages(result.data)
+        const userPages = result.data
 
-        // If no current page and pages exist, set the first one as current
-        if (!currentPage && result.data.length > 0) {
-          setCurrentPage(result.data[0])
-        }
+        if (userPages.length > 0) {
+          // User has pages - load them immediately
+          setPages(userPages)
+          setCurrentPage(userPages[0])
+          setIsLoading(false) // Stop loading immediately
+        } else {
+          // No pages exist - create default optimistically
+          const tempPage: SelectPage = {
+            id: `temp-${Date.now()}`,
+            userId,
+            title: "Welcome to Writi",
+            emoji: "📝",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
 
-        // If no pages exist, create a default one
-        if (result.data.length === 0) {
-          await createDefaultPage()
+          // Set optimistic state immediately
+          setPages([tempPage])
+          setCurrentPage(tempPage)
+          setIsLoading(false) // Stop loading immediately
+
+          // Create real page in background
+          createDefaultPageInBackground(tempPage.id)
         }
       } else {
         setError(result.message)
+        setIsLoading(false)
       }
     } catch (err) {
       setError("Failed to load pages")
       console.error("Error loading pages:", err)
-    } finally {
       setIsLoading(false)
     }
   }
 
-  // Create a default page
+  // Create a default page in background (non-blocking)
+  const createDefaultPageInBackground = async (tempId: string) => {
+    if (!userId) return
+
+    try {
+      const result = await createPageAction({
+        userId,
+        title: "Welcome to Writi",
+        emoji: "📝"
+      })
+
+      if (result.isSuccess) {
+        const realPage = result.data
+        // Replace temp page with real page
+        setPages(prev =>
+          prev.map(page => (page.id === tempId ? realPage : page))
+        )
+        setCurrentPage(realPage)
+      } else {
+        console.error("Failed to create default page:", result.message)
+        // Keep the temp page if creation fails
+      }
+    } catch (err) {
+      console.error("Error creating default page:", err)
+      // Keep the temp page if creation fails
+    }
+  }
+
+  // Create a default page (legacy method - kept for compatibility)
   const createDefaultPage = async () => {
     if (!userId) return null
 
     const result = await createPageAction({
       userId,
-      title: "Untitled",
+      title: "Welcome to Writi",
       emoji: "📝"
     })
 

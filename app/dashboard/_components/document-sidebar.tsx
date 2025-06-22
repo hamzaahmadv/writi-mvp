@@ -90,6 +90,8 @@ interface DocumentSidebarProps {
   onUpdatePage: (updates: Partial<SelectPage>) => Promise<void>
   onDeletePage?: (pageId: string) => Promise<void>
   onDuplicatePage?: (page: SelectPage) => Promise<SelectPage | null>
+  onEssentialSelect?: (essentialId: string) => void
+  selectedEssential?: string | null
 }
 
 export function DocumentSidebar({
@@ -100,11 +102,13 @@ export function DocumentSidebar({
   onCreatePage,
   onUpdatePage,
   onDeletePage,
-  onDuplicatePage
+  onDuplicatePage,
+  onEssentialSelect,
+  selectedEssential
 }: DocumentSidebarProps) {
   const [essentialsExpanded, setEssentialsExpanded] = useState(true)
   const [documentsExpanded, setDocumentsExpanded] = useState(true)
-  const [selectedItem, setSelectedItem] = useState("designs")
+  const [selectedItem, setSelectedItem] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [showMessage, setShowMessage] = useState(true)
   const [editingPageId, setEditingPageId] = useState<string | null>(null)
@@ -120,6 +124,14 @@ export function DocumentSidebar({
   const handlePageSelect = (pageId: string) => {
     onPageSelect(pageId)
     setSelectedItem(`page-${pageId}`)
+  }
+
+  // Handle essentials selection
+  const handleEssentialSelect = (essentialId: string) => {
+    if (onEssentialSelect) {
+      onEssentialSelect(essentialId)
+      setSelectedItem(essentialId)
+    }
   }
 
   // Handle page title editing
@@ -268,11 +280,13 @@ export function DocumentSidebar({
   const NavItemComponent = ({
     item,
     level = 0,
-    isMainNav = false
+    isMainNav = false,
+    isEssential = false
   }: {
     item: NavItem
     level?: number
     isMainNav?: boolean
+    isEssential?: boolean
   }) => (
     <div className="relative">
       <div
@@ -281,11 +295,23 @@ export function DocumentSidebar({
           ${
             isMainNav
               ? "border border-gray-200 bg-white shadow-sm hover:shadow-md"
-              : `hover:bg-gray-100 ${selectedItem === item.id || item.isActive ? "border border-blue-200 bg-blue-50 text-gray-900" : "text-gray-600"}`
+              : `hover:bg-gray-100 ${
+                  (isEssential && selectedEssential === item.id) ||
+                  (!isEssential && selectedItem === item.id) ||
+                  item.isActive
+                    ? "border border-blue-200 bg-blue-50 text-gray-900"
+                    : "text-gray-600"
+                }`
           }
           ${level > 0 ? "ml-4" : ""}
         `}
-        onClick={() => setSelectedItem(item.id)}
+        onClick={() => {
+          if (isEssential) {
+            handleEssentialSelect(item.id)
+          } else {
+            setSelectedItem(item.id)
+          }
+        }}
       >
         <item.icon
           className={`size-4 shrink-0 ${
@@ -315,6 +341,133 @@ export function DocumentSidebar({
       </div>
     </div>
   )
+
+  const EssentialItemComponent = ({ item }: { item: NavItem }) => {
+    const isSelected = selectedEssential === item.id
+
+    return (
+      <div className="group relative">
+        <div
+          className={`
+            mx-2 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200
+            hover:bg-gray-100 ${
+              isSelected
+                ? "border border-blue-200 bg-blue-50 text-gray-900"
+                : "text-gray-600"
+            }
+          `}
+        >
+          <span className="shrink-0 text-sm">
+            {item.id === "todo" ? "📋" : "🚀"}
+          </span>
+
+          <div
+            className="min-w-0 flex-1"
+            onClick={() => handleEssentialSelect(item.id)}
+          >
+            <div className="flex items-center gap-2">
+              <div className="truncate text-sm font-medium">{item.title}</div>
+              {isSelected && <Check className="size-3 text-blue-600" />}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            {/* Quick Edit Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-6 p-0 text-gray-500 hover:text-gray-700"
+              onClick={e => {
+                e.stopPropagation()
+                toast.info("Essential items cannot be renamed")
+              }}
+              title="Essential item"
+            >
+              <Edit className="size-3" />
+            </Button>
+
+            {/* 3-Dot Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-6 p-0 text-gray-500 hover:text-gray-700"
+                  onClick={e => e.stopPropagation()}
+                  title="More options"
+                >
+                  <MoreHorizontal className="size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+                sideOffset={4}
+              >
+                <DropdownMenuItem
+                  onClick={() => {
+                    const url = `${window.location.origin}/dashboard?essential=${item.id}`
+                    navigator.clipboard.writeText(url)
+                    toast.success("Link copied to clipboard")
+                  }}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                >
+                  <Link className="size-4 text-black" />
+                  Copy Link
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    toast.info(
+                      "Essential items are built-in and cannot be duplicated"
+                    )
+                  }
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-50"
+                >
+                  <Copy className="size-4 text-gray-400" />
+                  Duplicate
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    toast.info("Essential items cannot be renamed")
+                  }
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-50"
+                >
+                  <Edit className="size-4 text-gray-400" />
+                  Rename
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    toast.info(
+                      "Essential items are built-in and cannot be moved"
+                    )
+                  }
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-50"
+                >
+                  <FolderPlus className="size-4 text-gray-400" />
+                  Move to
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1 border-gray-200" />
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    toast.info("Essential items cannot be deleted")
+                  }
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-50"
+                >
+                  <Trash2 className="size-4 text-gray-400" />
+                  Move to Trash
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const PageItemComponent = ({ page }: { page: SelectPage }) => {
     const isSelected = currentPage?.id === page.id
@@ -360,6 +513,7 @@ export function DocumentSidebar({
                 {isFavorited && (
                   <Star className="size-3 fill-yellow-400 text-yellow-400" />
                 )}
+                {isSelected && <Check className="size-3 text-blue-600" />}
               </div>
             </div>
           )}
@@ -609,7 +763,7 @@ export function DocumentSidebar({
                 className="space-y-1 overflow-hidden p-2"
               >
                 {essentialsItems.map(item => (
-                  <NavItemComponent key={item.id} item={item} />
+                  <EssentialItemComponent key={item.id} item={item} />
                 ))}
               </motion.div>
             )}
@@ -626,103 +780,59 @@ export function DocumentSidebar({
             onAdd={handleCreatePage}
             isLoading={isCreatingPage}
           />
-          <AnimatePresence>
-            {documentsExpanded && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="space-y-1 overflow-hidden p-2"
-              >
-                {pagesLoading ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="px-5 py-3 text-center"
-                  >
-                    <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{
-                          duration: 1,
-                          repeat: Infinity,
-                          ease: "linear"
-                        }}
-                      >
-                        <FileText className="size-4" />
-                      </motion.div>
-                      Loading documents...
+          {documentsExpanded && (
+            <div className="space-y-1 overflow-hidden p-2">
+              {pagesLoading ? (
+                <div className="px-5 py-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                    <FileText className="size-4" />
+                    Loading...
+                  </div>
+                </div>
+              ) : pages.length > 0 ? (
+                <div className="space-y-1">
+                  {pages.map(page => (
+                    <PageItemComponent key={page.id} page={page} />
+                  ))}
+                </div>
+              ) : (
+                <div className="px-5 py-8 text-center">
+                  <div className="space-y-3">
+                    <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-gray-100">
+                      <FileText className="size-6 text-gray-400" />
                     </div>
-                  </motion.div>
-                ) : pages.length > 0 ? (
-                  <motion.div layout className="space-y-1">
-                    {pages.map((page, index) => (
-                      <motion.div
-                        key={page.id}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ delay: index * 0.05, duration: 0.2 }}
-                        layout
-                      >
-                        <PageItemComponent page={page} />
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="px-5 py-8 text-center"
-                  >
-                    <div className="space-y-3">
-                      <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-gray-100">
-                        <FileText className="size-6 text-gray-400" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-600">
-                          No documents yet
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          Create your first document to get started
-                        </p>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleCreatePage}
-                        disabled={isCreatingPage}
-                        className="text-xs"
-                      >
-                        {isCreatingPage ? (
-                          <>
-                            <motion.div
-                              animate={{ rotate: 360 }}
-                              transition={{
-                                duration: 1,
-                                repeat: Infinity,
-                                ease: "linear"
-                              }}
-                              className="mr-2"
-                            >
-                              <Plus className="size-3" />
-                            </motion.div>
-                            Creating...
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="mr-2 size-3" />
-                            Create Document
-                          </>
-                        )}
-                      </Button>
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">
+                        No documents yet
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        Create your first document to get started
+                      </p>
                     </div>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCreatePage}
+                      disabled={isCreatingPage}
+                      className="text-xs"
+                    >
+                      {isCreatingPage ? (
+                        <>
+                          <Plus className="mr-2 size-3" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="mr-2 size-3" />
+                          Create Document
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer Items */}
