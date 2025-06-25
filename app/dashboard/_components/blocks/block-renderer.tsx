@@ -17,6 +17,8 @@ import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Block, BlockType, EditorActions } from "@/types"
 import { getBlockPlaceholder } from "@/lib/block-configs"
+import { useCopyToClipboard } from "@/lib/hooks/use-copy-to-clipboard"
+import { toast } from "sonner"
 
 interface BlockRendererProps {
   block: Block
@@ -331,6 +333,52 @@ export function BlockRenderer({
     }, 100) // Reduced from 150ms to 100ms
   }
 
+  // Copy to clipboard functionality
+  const { copyToClipboard } = useCopyToClipboard()
+
+  const handleCopyBlock = () => {
+    if (block.content) {
+      copyToClipboard(block.content)
+      toast.success("Block content copied to clipboard")
+    } else {
+      toast.info("Block is empty")
+    }
+  }
+
+  // Handle paste events to strip formatting and paste as plain text
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault()
+
+    // Get plain text from clipboard
+    const plainText = e.clipboardData.getData("text/plain")
+
+    if (plainText) {
+      // Insert the plain text at cursor position
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        range.deleteContents()
+
+        // Create text node and insert it
+        const textNode = document.createTextNode(plainText)
+        range.insertNode(textNode)
+
+        // Move cursor to end of inserted text
+        range.setStartAfter(textNode)
+        range.setEndAfter(textNode)
+        selection.removeAllRanges()
+        selection.addRange(range)
+
+        // Update the block content
+        if (contentRef.current) {
+          const newContent = contentRef.current.textContent || ""
+          lastContentRef.current = newContent
+          actions.updateBlock(block.id, { content: newContent })
+        }
+      }
+    }
+  }
+
   const renderBlockContent = () => {
     const commonProps = {
       ref: contentRef,
@@ -338,6 +386,7 @@ export function BlockRenderer({
       suppressContentEditableWarning: true,
       onKeyDown: handleKeyDown,
       onInput: handleInput,
+      onPaste: handlePaste,
       onCompositionStart: () => {
         isComposingRef.current = true
       },
@@ -647,7 +696,8 @@ export function BlockRenderer({
             variant="ghost"
             size="icon"
             className="size-6 p-0 text-gray-400 hover:text-gray-600"
-            onClick={() => actions.duplicateBlock(block.id)}
+            onClick={handleCopyBlock}
+            title="Copy block content"
           >
             <Copy className="size-3" />
           </Button>
