@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Sparkles,
@@ -112,8 +112,6 @@ export function DocumentSidebar({
   const [selectedItem, setSelectedItem] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [showMessage, setShowMessage] = useState(true)
-  const [editingPageId, setEditingPageId] = useState<string | null>(null)
-  const [editingTitle, setEditingTitle] = useState("")
   const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [isCreatingPage, setIsCreatingPage] = useState(false)
 
@@ -135,41 +133,6 @@ export function DocumentSidebar({
     }
   }
 
-  // Handle page title editing
-  const startEditing = (page: SelectPage) => {
-    setEditingPageId(page.id)
-    setEditingTitle(page.title)
-  }
-
-  const saveTitle = async (pageId: string) => {
-    if (
-      editingTitle.trim() &&
-      editingTitle !== pages.find(p => p.id === pageId)?.title
-    ) {
-      const trimmedTitle = editingTitle.trim()
-
-      // Find the page being edited
-      const page = pages.find(p => p.id === pageId)
-      if (page) {
-        // Switch to the page being edited to ensure it becomes current
-        if (currentPage?.id !== pageId) {
-          onPageSelect(pageId)
-        }
-
-        // Update the page title
-        await onUpdatePage({ title: trimmedTitle })
-        toast.success("Page renamed successfully")
-      }
-    }
-    setEditingPageId(null)
-    setEditingTitle("")
-  }
-
-  const cancelEditing = () => {
-    setEditingPageId(null)
-    setEditingTitle("")
-  }
-
   // Handle creating new page with animation
   const handleCreatePage = async () => {
     if (isCreatingPage) return
@@ -180,10 +143,7 @@ export function DocumentSidebar({
       if (newPage) {
         handlePageSelect(newPage.id)
         toast.success("New page created")
-        // Auto-start editing the title
-        setTimeout(() => {
-          startEditing(newPage)
-        }, 100)
+        // Note: The new page will auto-focus for editing when rendered
       }
     } catch (error) {
       toast.error("Failed to create page")
@@ -239,10 +199,6 @@ export function DocumentSidebar({
         console.error("Error duplicating page:", error)
       }
     }
-  }
-
-  const handleRenamePage = (page: SelectPage) => {
-    startEditing(page)
   }
 
   const handleMoveTo = (page: SelectPage) => {
@@ -472,8 +428,63 @@ export function DocumentSidebar({
 
   const PageItemComponent = ({ page }: { page: SelectPage }) => {
     const isSelected = currentPage?.id === page.id
-    const isEditing = editingPageId === page.id
     const isFavorited = favorites.has(page.id)
+
+    // Local state for this specific page item
+    const [isEditing, setIsEditing] = useState(false)
+    const [editValue, setEditValue] = useState(page.title)
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    // Update edit value when page title changes from outside
+    useEffect(() => {
+      setEditValue(page.title)
+    }, [page.title])
+
+    const startLocalEditing = () => {
+      setIsEditing(true)
+      setEditValue(page.title)
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus()
+          inputRef.current.select()
+        }
+      }, 0)
+    }
+
+    const saveLocalTitle = async () => {
+      if (editValue.trim() && editValue !== page.title) {
+        const trimmedTitle = editValue.trim()
+
+        // Switch to the page being edited to ensure it becomes current
+        if (currentPage?.id !== page.id) {
+          onPageSelect(page.id)
+        }
+
+        // Update the page title
+        await onUpdatePage({ title: trimmedTitle })
+        toast.success("Page renamed successfully")
+      }
+      setIsEditing(false)
+    }
+
+    const cancelLocalEditing = () => {
+      setIsEditing(false)
+      setEditValue(page.title)
+    }
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setEditValue(e.target.value)
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault()
+        saveLocalTitle()
+      } else if (e.key === "Escape") {
+        e.preventDefault()
+        cancelLocalEditing()
+      }
+    }
 
     return (
       <div className="group relative">
@@ -491,18 +502,12 @@ export function DocumentSidebar({
 
           {isEditing ? (
             <Input
-              value={editingTitle}
-              onChange={e => setEditingTitle(e.target.value)}
-              onBlur={() => saveTitle(page.id)}
-              onKeyDown={e => {
-                if (e.key === "Enter") {
-                  saveTitle(page.id)
-                } else if (e.key === "Escape") {
-                  cancelEditing()
-                }
-              }}
+              ref={inputRef}
+              value={editValue}
+              onChange={handleInputChange}
+              onBlur={saveLocalTitle}
+              onKeyDown={handleKeyDown}
               className="h-6 flex-1 border-none bg-transparent p-0 text-sm shadow-none focus:ring-0"
-              autoFocus
             />
           ) : (
             <div
@@ -528,7 +533,7 @@ export function DocumentSidebar({
                 className="size-6 p-0 text-gray-500 hover:text-gray-700"
                 onClick={e => {
                   e.stopPropagation()
-                  startEditing(page)
+                  startLocalEditing()
                 }}
                 title="Rename"
               >
@@ -587,7 +592,7 @@ export function DocumentSidebar({
                   </DropdownMenuItem>
 
                   <DropdownMenuItem
-                    onClick={() => handleRenamePage(page)}
+                    onClick={() => startLocalEditing()}
                     className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
                   >
                     <Edit className="size-4 text-black" />

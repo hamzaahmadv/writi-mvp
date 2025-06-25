@@ -458,39 +458,6 @@ export default function WritiEditor({
       [isEssential, deleteEssentialBlock, deleteBlockInDb]
     ),
 
-    duplicateBlock: useCallback(
-      async (id: string) => {
-        const block = findBlock(id)
-        if (!block) return
-
-        try {
-          const newBlockId = isEssential
-            ? await createEssentialBlock(id, block.type)
-            : await createBlockInDb(id, block.type)
-
-          if (newBlockId) {
-            const updateFn = isEssential
-              ? updateEssentialBlock
-              : updateBlockInDb
-            await updateFn(newBlockId, {
-              content: block.content,
-              props: block.props
-            })
-          }
-        } catch (error) {
-          console.error("Failed to duplicate block:", error)
-        }
-      },
-      [
-        findBlock,
-        isEssential,
-        createEssentialBlock,
-        createBlockInDb,
-        updateEssentialBlock,
-        updateBlockInDb
-      ]
-    ),
-
     moveBlock: useCallback(
       async (dragId: string, hoverId: string, position: "before" | "after") => {
         try {
@@ -832,6 +799,23 @@ export default function WritiEditor({
               className="mb-2 text-4xl font-bold text-gray-900 outline-none"
               contentEditable
               suppressContentEditableWarning={true}
+              onPaste={e => {
+                e.preventDefault()
+                const plainText = e.clipboardData.getData("text/plain")
+                if (plainText) {
+                  const selection = window.getSelection()
+                  if (selection && selection.rangeCount > 0) {
+                    const range = selection.getRangeAt(0)
+                    range.deleteContents()
+                    const textNode = document.createTextNode(plainText)
+                    range.insertNode(textNode)
+                    range.setStartAfter(textNode)
+                    range.setEndAfter(textNode)
+                    selection.removeAllRanges()
+                    selection.addRange(range)
+                  }
+                }
+              }}
               onBlur={e => {
                 const newTitle = e.currentTarget.textContent || "Untitled"
                 if (newTitle !== currentPage.title) {

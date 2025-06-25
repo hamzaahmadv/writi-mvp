@@ -63,7 +63,6 @@ export interface EditorActions {
   createBlock: (afterId?: string, type?: BlockType) => Promise<string | null>
   updateBlock: (id: string, updates: Partial<Block>) => Promise<void>
   deleteBlock: (id: string) => Promise<void>
-  duplicateBlock: (id: string) => Promise<void>
   moveBlock: (
     dragId: string,
     hoverId: string,
