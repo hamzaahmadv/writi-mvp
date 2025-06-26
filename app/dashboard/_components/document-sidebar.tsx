@@ -3,22 +3,12 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
-  Sparkles,
-  Home,
-  BookOpen,
-  Brain,
-  Search,
   ChevronDown,
   ChevronRight,
   FileText,
   CheckSquare,
   Calendar,
   Package,
-  Target,
-  Settings,
-  Mail,
-  Users,
-  Layout,
   MessageCircle,
   Palette,
   Check,
@@ -36,6 +26,18 @@ import {
   FolderPlus,
   StarOff
 } from "lucide-react"
+// Heroicons solid imports for navigation
+import {
+  SparklesIcon,
+  HomeIcon,
+  RectangleGroupIcon,
+  RectangleStackIcon,
+  MagnifyingGlassIcon,
+  Cog6ToothIcon,
+  InboxIcon,
+  UserPlusIcon,
+  Squares2X2Icon
+} from "@heroicons/react/24/solid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { SelectPage } from "@/db/schema"
@@ -62,11 +64,11 @@ interface NavItem {
 }
 
 const navigationItems: NavItem[] = [
-  { id: "writi-ai", title: "Writi AI", icon: Sparkles },
-  { id: "home", title: "Home", icon: Home },
-  { id: "prompt-guide", title: "Prompt Guide", icon: BookOpen },
-  { id: "memory-bank", title: "Memory bank", icon: Brain },
-  { id: "search", title: "Search", icon: Search }
+  { id: "writi-ai", title: "Writi AI", icon: SparklesIcon },
+  { id: "home", title: "Home", icon: HomeIcon },
+  { id: "prompt-guide", title: "Prompt Guide", icon: RectangleGroupIcon },
+  { id: "memory-bank", title: "Memory bank", icon: RectangleStackIcon },
+  { id: "search", title: "Search", icon: MagnifyingGlassIcon }
 ]
 
 const essentialsItems: NavItem[] = [
@@ -75,11 +77,10 @@ const essentialsItems: NavItem[] = [
 ]
 
 const footerItems: NavItem[] = [
-  { id: "goals", title: "Goals", icon: Target, iconColor: "figma-accent-red" },
-  { id: "settings", title: "Settings", icon: Settings },
-  { id: "inbox", title: "Inbox", icon: Mail },
-  { id: "invite", title: "Invite members", icon: Users },
-  { id: "templates", title: "Templates", icon: Layout }
+  { id: "settings", title: "Settings", icon: Cog6ToothIcon },
+  { id: "inbox", title: "Inbox", icon: InboxIcon },
+  { id: "invite", title: "Invite members", icon: UserPlusIcon },
+  { id: "templates", title: "Templates", icon: Squares2X2Icon }
 ]
 
 interface DocumentSidebarProps {
