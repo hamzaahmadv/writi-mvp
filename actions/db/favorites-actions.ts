@@ -78,7 +78,18 @@ export async function getFavoritePagesAction(
   userId: string
 ): Promise<ActionState<Array<SelectFavorite & { page: any }>>> {
   try {
-    const favoritesWithPages = await db
+    // Get all favorites for this user
+    const favorites = await db.query.favorites.findMany({
+      where: eq(favoritesTable.userId, userId),
+      orderBy: [favoritesTable.createdAt]
+    })
+
+    // Separate essential pages from regular pages
+    const essentialPageIds = favorites.filter(f => f.pageId.startsWith('essential-'))
+    const regularPageIds = favorites.filter(f => !f.pageId.startsWith('essential-'))
+
+    // Get regular pages from database
+    const regularPagesData = regularPageIds.length > 0 ? await db
       .select({
         id: favoritesTable.id,
         userId: favoritesTable.userId,
@@ -97,12 +108,59 @@ export async function getFavoritePagesAction(
       .from(favoritesTable)
       .innerJoin(pagesTable, eq(favoritesTable.pageId, pagesTable.id))
       .where(eq(favoritesTable.userId, userId))
-      .orderBy(favoritesTable.createdAt)
+      .orderBy(favoritesTable.createdAt) : []
+
+    // Create essential page data
+    const essentialPagesData = essentialPageIds.map(favorite => {
+      let essentialPage;
+      if (favorite.pageId === 'essential-todo') {
+        essentialPage = {
+          id: 'essential-todo',
+          title: 'To-do List / Planner',
+          emoji: '📋',
+          userId: userId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      } else if (favorite.pageId === 'essential-getting-started') {
+        essentialPage = {
+          id: 'essential-getting-started',
+          title: 'Getting Started',
+          emoji: '🚀',
+          userId: userId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      } else {
+        // Fallback for unknown essential pages
+        essentialPage = {
+          id: favorite.pageId,
+          title: 'Essential Page',
+          emoji: '⭐',
+          userId: userId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      }
+
+      return {
+        id: favorite.id,
+        userId: favorite.userId,
+        pageId: favorite.pageId,
+        createdAt: favorite.createdAt,
+        updatedAt: favorite.updatedAt,
+        page: essentialPage
+      }
+    })
+
+    // Combine and sort by creation date
+    const allFavorites = [...regularPagesData, ...essentialPagesData]
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 
     return {
       isSuccess: true,
       message: "Favorite pages retrieved successfully",
-      data: favoritesWithPages
+      data: allFavorites
     }
   } catch (error) {
     console.error("Error getting favorite pages:", error)

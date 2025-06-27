@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import WritiEditor from "./_components/writi-editor"
-import { DocumentSidebar } from "./_components/document-sidebar"
+import { DocumentSidebar, EssentialPage } from "./_components/document-sidebar"
 import { WritiAiPanel } from "./_components/writi-ai-panel"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { usePage } from "@/lib/hooks/use-page"
@@ -35,46 +35,132 @@ export default function DashboardPage() {
     new Set()
   )
 
-  // Create essential pages as special documents - memoized for performance
-  const essentialPages = useMemo(
-    () => ({
-      todo: {
-        id: "essential-todo",
+  // Dynamic essential pages storage
+  const [essentialPages, setEssentialPages] = useState<EssentialPage[]>([])
+
+  // Load essential pages from localStorage
+  useEffect(() => {
+    if (userId) {
+      const stored = localStorage.getItem(`essential-pages-${userId}`)
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored)
+          setEssentialPages(parsed)
+        } catch (error) {
+          console.error("Error loading essential pages:", error)
+          // Set default essential pages if parsing fails
+          setDefaultEssentials()
+        }
+      } else {
+        // Set default essential pages for new users
+        setDefaultEssentials()
+      }
+    }
+  }, [userId])
+
+  // Set default essential pages
+  const setDefaultEssentials = () => {
+    const defaultEssentials: EssentialPage[] = [
+      {
+        id: "todo",
         title: "To-do List / Planner",
         emoji: "📋",
-        userId: userId || "",
-        createdAt: new Date(),
-        updatedAt: new Date()
+        isBuiltIn: true
       },
-      "getting-started": {
-        id: "essential-getting-started",
+      {
+        id: "getting-started",
         title: "Getting Started",
         emoji: "🚀",
-        userId: userId || "",
-        createdAt: new Date(),
-        updatedAt: new Date()
+        isBuiltIn: true
       }
-    }),
+    ]
+    setEssentialPages(defaultEssentials)
+    if (userId) {
+      localStorage.setItem(
+        `essential-pages-${userId}`,
+        JSON.stringify(defaultEssentials)
+      )
+    }
+  }
+
+  // Save essential pages to localStorage
+  const saveEssentialPages = useCallback(
+    (pages: EssentialPage[]) => {
+      if (userId) {
+        localStorage.setItem(`essential-pages-${userId}`, JSON.stringify(pages))
+      }
+    },
     [userId]
+  )
+
+  // Essential page management functions
+  const createEssential = useCallback(
+    async (title?: string, emoji?: string): Promise<EssentialPage | null> => {
+      if (!userId) return null
+
+      const newEssential: EssentialPage = {
+        id: `essential-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        title: title || "New Essential",
+        emoji: emoji || "⭐",
+        isBuiltIn: false
+      }
+
+      const updatedPages = [...essentialPages, newEssential]
+      setEssentialPages(updatedPages)
+      saveEssentialPages(updatedPages)
+
+      return newEssential
+    },
+    [essentialPages, userId, saveEssentialPages]
+  )
+
+  const updateEssential = useCallback(
+    async (id: string, updates: Partial<EssentialPage>): Promise<void> => {
+      const updatedPages = essentialPages.map(page =>
+        page.id === id ? { ...page, ...updates } : page
+      )
+      setEssentialPages(updatedPages)
+      saveEssentialPages(updatedPages)
+    },
+    [essentialPages, saveEssentialPages]
+  )
+
+  const deleteEssential = useCallback(
+    async (id: string): Promise<void> => {
+      const updatedPages = essentialPages.filter(page => page.id !== id)
+      setEssentialPages(updatedPages)
+      saveEssentialPages(updatedPages)
+
+      // Clear any stored blocks for this essential
+      if (userId) {
+        localStorage.removeItem(`essential-blocks-essential-${id}`)
+      }
+
+      // If the deleted essential was selected, deselect it
+      if (selectedEssential === id) {
+        setSelectedEssential(null)
+      }
+    },
+    [essentialPages, userId, selectedEssential, saveEssentialPages]
   )
 
   // Preload essential pages immediately for instant access
   useEffect(() => {
-    if (userId) {
-      // Preload essential pages immediately without checking existing state
-      const essentialIds = ["essential-todo", "essential-getting-started"]
+    if (userId && essentialPages.length > 0) {
       const preloaded = new Set<string>()
 
-      essentialIds.forEach(id => {
-        const stored = localStorage.getItem(`essential-blocks-${id}`)
+      essentialPages.forEach(essential => {
+        const stored = localStorage.getItem(
+          `essential-blocks-essential-${essential.id}`
+        )
         if (stored) {
-          preloaded.add(id)
+          preloaded.add(`essential-${essential.id}`)
         }
       })
 
       setPreloadedEssentials(preloaded)
     }
-  }, [userId]) // Removed dependency on preloadedEssentials.size for immediate loading
+  }, [userId, essentialPages])
 
   const handlePageSelect = useCallback(
     (pageId: string) => {
@@ -97,13 +183,21 @@ export default function DashboardPage() {
 
   // Get the current essential page or regular page
   const getCurrentPage = () => {
-    if (
-      selectedEssential &&
-      essentialPages[selectedEssential as keyof typeof essentialPages]
-    ) {
-      return essentialPages[
-        selectedEssential as keyof typeof essentialPages
-      ] as SelectPage
+    if (selectedEssential) {
+      const essential = essentialPages.find(
+        page => page.id === selectedEssential
+      )
+      if (essential) {
+        // Convert EssentialPage to SelectPage format for the editor
+        return {
+          id: `essential-${essential.id}`,
+          title: essential.title,
+          emoji: essential.emoji,
+          userId: userId || "",
+          createdAt: new Date(),
+          updatedAt: new Date()
+        } as SelectPage
+      }
     }
     return currentPage
   }
@@ -125,17 +219,17 @@ export default function DashboardPage() {
     return current
   }
 
-  // Handle updating essential pages (for now just show toast, but you could save to localStorage or a special table)
+  // Handle updating essential pages
   const handleUpdateEssentialPage = async (updates: Partial<SelectPage>) => {
     if (selectedEssential) {
-      // For essentials, we'll just update the title in our local state
-      if (updates.title) {
-        const essential =
-          essentialPages[selectedEssential as keyof typeof essentialPages]
-        if (essential) {
-          essential.title = updates.title
-          toast.success("Essential page updated")
-        }
+      // For essentials, update the title and emoji
+      const essentialUpdates: Partial<EssentialPage> = {}
+      if (updates.title) essentialUpdates.title = updates.title
+      if (updates.emoji) essentialUpdates.emoji = updates.emoji
+
+      if (Object.keys(essentialUpdates).length > 0) {
+        await updateEssential(selectedEssential, essentialUpdates)
+        toast.success("Essential page updated")
       }
     } else {
       // Regular page update
@@ -173,6 +267,7 @@ export default function DashboardPage() {
         <DocumentSidebar
           currentPage={currentPage}
           pages={pages}
+          essentialPages={essentialPages}
           isLoading={pagesLoading}
           onPageSelect={handlePageSelect}
           onCreatePage={createPage}
@@ -180,6 +275,9 @@ export default function DashboardPage() {
           onDeletePage={deletePage}
           onDuplicatePage={handleDuplicatePage}
           onEssentialSelect={handleEssentialSelect}
+          onCreateEssential={createEssential}
+          onUpdateEssential={updateEssential}
+          onDeleteEssential={deleteEssential}
           selectedEssential={selectedEssential}
         />
 
