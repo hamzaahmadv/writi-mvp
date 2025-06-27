@@ -6,3 +6,6 @@ Exports the types for the app.
 
 export * from "./server-action-types"
 export * from "./editor-types"
+
+// Re-export EssentialPage from document-sidebar for convenience
+export type { EssentialPage } from "@/app/dashboard/_components/document-sidebar"

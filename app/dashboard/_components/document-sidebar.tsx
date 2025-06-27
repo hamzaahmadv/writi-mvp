@@ -73,10 +73,7 @@ const navigationItems: NavItem[] = [
   { id: "search", title: "Search", icon: MagnifyingGlassIcon }
 ]
 
-const essentialsItems: NavItem[] = [
-  { id: "todo", title: "to-do list / planner", icon: FileText },
-  { id: "getting-started", title: "Getting started", icon: Monitor }
-]
+// Essential items are now passed as props to support dynamic creation
 
 const footerItems: NavItem[] = [
   { id: "settings", title: "Settings", icon: Cog6ToothIcon },
@@ -85,9 +82,17 @@ const footerItems: NavItem[] = [
   { id: "templates", title: "Templates", icon: Squares2X2Icon }
 ]
 
+export interface EssentialPage {
+  id: string
+  title: string
+  emoji: string
+  isBuiltIn?: boolean
+}
+
 interface DocumentSidebarProps {
   currentPage: SelectPage | null
   pages: SelectPage[]
+  essentialPages: EssentialPage[]
   isLoading: boolean
   onPageSelect: (pageId: string) => void
   onCreatePage: (title?: string, emoji?: string) => Promise<SelectPage | null>
@@ -95,12 +100,22 @@ interface DocumentSidebarProps {
   onDeletePage?: (pageId: string) => Promise<void>
   onDuplicatePage?: (page: SelectPage) => Promise<SelectPage | null>
   onEssentialSelect?: (essentialId: string) => void
+  onCreateEssential?: (
+    title?: string,
+    emoji?: string
+  ) => Promise<EssentialPage | null>
+  onUpdateEssential?: (
+    id: string,
+    updates: Partial<EssentialPage>
+  ) => Promise<void>
+  onDeleteEssential?: (id: string) => Promise<void>
   selectedEssential?: string | null
 }
 
 export function DocumentSidebar({
   currentPage,
   pages,
+  essentialPages,
   isLoading: pagesLoading,
   onPageSelect,
   onCreatePage,
@@ -108,6 +123,9 @@ export function DocumentSidebar({
   onDeletePage,
   onDuplicatePage,
   onEssentialSelect,
+  onCreateEssential,
+  onUpdateEssential,
+  onDeleteEssential,
   selectedEssential
 }: DocumentSidebarProps) {
   const { userId } = useCurrentUser()
@@ -126,6 +144,7 @@ export function DocumentSidebar({
   const [mounted, setMounted] = useState(false)
   const [showMessage, setShowMessage] = useState(true)
   const [isCreatingPage, setIsCreatingPage] = useState(false)
+  const [isCreatingEssential, setIsCreatingEssential] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -162,6 +181,25 @@ export function DocumentSidebar({
       console.error("Error creating page:", error)
     } finally {
       setIsCreatingPage(false)
+    }
+  }
+
+  // Handle creating new essential page
+  const handleCreateEssential = async () => {
+    if (isCreatingEssential || !onCreateEssential) return
+
+    setIsCreatingEssential(true)
+    try {
+      const newEssential = await onCreateEssential("New Essential", "⭐")
+      if (newEssential) {
+        handleEssentialSelect(newEssential.id)
+        toast.success("New essential page created")
+      }
+    } catch (error) {
+      toast.error("Failed to create essential page")
+      console.error("Error creating essential page:", error)
+    } finally {
+      setIsCreatingEssential(false)
     }
   }
 
@@ -255,6 +293,13 @@ export function DocumentSidebar({
     }
   }, [currentPage])
 
+  // Clear selected item when essential is selected
+  useEffect(() => {
+    if (selectedEssential) {
+      setSelectedItem(null)
+    }
+  }, [selectedEssential])
+
   const NavItemComponent = ({
     item,
     level = 0,
@@ -320,8 +365,84 @@ export function DocumentSidebar({
     </div>
   )
 
-  const EssentialItemComponent = ({ item }: { item: NavItem }) => {
-    const isSelected = selectedEssential === item.id
+  const EssentialItemComponent = ({
+    essential
+  }: {
+    essential: EssentialPage
+  }) => {
+    const isSelected = selectedEssential === essential.id
+    const [isEditing, setIsEditing] = useState(false)
+    const [editValue, setEditValue] = useState(essential.title)
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    // Update edit value when essential title changes from outside
+    useEffect(() => {
+      setEditValue(essential.title)
+    }, [essential.title])
+
+    const startLocalEditing = () => {
+      if (essential.isBuiltIn) {
+        toast.info("Built-in essential items cannot be renamed")
+        return
+      }
+      setIsEditing(true)
+      setEditValue(essential.title)
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus()
+          inputRef.current.select()
+        }
+      }, 0)
+    }
+
+    const saveLocalTitle = async () => {
+      if (
+        editValue.trim() &&
+        editValue !== essential.title &&
+        onUpdateEssential
+      ) {
+        const trimmedTitle = editValue.trim()
+        await onUpdateEssential(essential.id, { title: trimmedTitle })
+        toast.success("Essential page renamed successfully")
+      }
+      setIsEditing(false)
+    }
+
+    const cancelLocalEditing = () => {
+      setIsEditing(false)
+      setEditValue(essential.title)
+    }
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setEditValue(e.target.value)
+    }
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault()
+        saveLocalTitle()
+      } else if (e.key === "Escape") {
+        e.preventDefault()
+        cancelLocalEditing()
+      }
+    }
+
+    const handleDeleteEssential = async () => {
+      if (essential.isBuiltIn) {
+        toast.info("Built-in essential items cannot be deleted")
+        return
+      }
+
+      if (onDeleteEssential) {
+        try {
+          await onDeleteEssential(essential.id)
+          toast.success("Essential page deleted")
+        } catch (error) {
+          toast.error("Failed to delete essential page")
+          console.error("Error deleting essential:", error)
+        }
+      }
+    }
 
     return (
       <div className="group relative">
@@ -335,113 +456,112 @@ export function DocumentSidebar({
             }
           `}
         >
-          <span className="shrink-0 text-sm">
-            {item.id === "todo" ? "📋" : "🚀"}
-          </span>
+          <span className="shrink-0 text-sm">{essential.emoji}</span>
 
-          <div
-            className="min-w-0 flex-1"
-            onClick={() => handleEssentialSelect(item.id)}
-          >
-            <div className="flex items-center gap-2">
-              <div className="truncate text-sm font-medium">{item.title}</div>
-              {isSelected && <Check className="size-3 text-blue-600" />}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-            {/* Quick Edit Button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="size-6 p-0 text-gray-500 hover:text-gray-700"
-              onClick={e => {
-                e.stopPropagation()
-                toast.info("Essential items cannot be renamed")
-              }}
-              title="Essential item"
+          {isEditing ? (
+            <Input
+              ref={inputRef}
+              value={editValue}
+              onChange={handleInputChange}
+              onBlur={saveLocalTitle}
+              onKeyDown={handleKeyDown}
+              className="h-6 flex-1 border-none bg-transparent p-0 text-sm shadow-none focus:ring-0"
+            />
+          ) : (
+            <div
+              className="min-w-0 flex-1"
+              onClick={() => handleEssentialSelect(essential.id)}
             >
-              <Edit className="size-3" />
-            </Button>
+              <div className="flex items-center gap-2">
+                <div className="truncate text-sm font-medium">
+                  {essential.title}
+                </div>
+                {isSelected && <Check className="size-3 text-blue-600" />}
+              </div>
+            </div>
+          )}
 
-            {/* 3-Dot Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="size-6 p-0 text-gray-500 hover:text-gray-700"
-                  onClick={e => e.stopPropagation()}
-                  title="More options"
-                >
-                  <MoreHorizontal className="size-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
-                sideOffset={4}
+          {!isEditing && (
+            <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+              {/* Quick Edit Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-6 p-0 text-gray-500 hover:text-gray-700"
+                onClick={e => {
+                  e.stopPropagation()
+                  startLocalEditing()
+                }}
+                title={
+                  essential.isBuiltIn ? "Built-in essential item" : "Rename"
+                }
               >
-                <DropdownMenuItem
-                  onClick={() => {
-                    const url = `${window.location.origin}/dashboard?essential=${item.id}`
-                    navigator.clipboard.writeText(url)
-                    toast.success("Link copied to clipboard")
-                  }}
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
-                >
-                  <Link className="size-4 text-black" />
-                  Copy Link
-                </DropdownMenuItem>
+                <Edit className="size-3" />
+              </Button>
 
-                <DropdownMenuItem
-                  onClick={() =>
-                    toast.info(
-                      "Essential items are built-in and cannot be duplicated"
-                    )
-                  }
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-50"
+              {/* 3-Dot Menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="size-6 p-0 text-gray-500 hover:text-gray-700"
+                    onClick={e => e.stopPropagation()}
+                    title="More options"
+                  >
+                    <MoreHorizontal className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="end"
+                  className="w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+                  sideOffset={4}
                 >
-                  <Copy className="size-4 text-gray-400" />
-                  Duplicate
-                </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const url = `${window.location.origin}/dashboard?essential=${essential.id}`
+                      navigator.clipboard.writeText(url)
+                      toast.success("Link copied to clipboard")
+                    }}
+                    className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                  >
+                    <Link className="size-4 text-black" />
+                    Copy Link
+                  </DropdownMenuItem>
 
-                <DropdownMenuItem
-                  onClick={() =>
-                    toast.info("Essential items cannot be renamed")
-                  }
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-50"
-                >
-                  <Edit className="size-4 text-gray-400" />
-                  Rename
-                </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => startLocalEditing()}
+                    className={`flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-gray-50 ${
+                      essential.isBuiltIn
+                        ? "text-gray-400"
+                        : "text-black hover:text-black focus:bg-gray-50 focus:text-black"
+                    }`}
+                  >
+                    <Edit
+                      className={`size-4 ${essential.isBuiltIn ? "text-gray-400" : "text-black"}`}
+                    />
+                    Rename
+                  </DropdownMenuItem>
 
-                <DropdownMenuItem
-                  onClick={() =>
-                    toast.info(
-                      "Essential items are built-in and cannot be moved"
-                    )
-                  }
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-50"
-                >
-                  <FolderPlus className="size-4 text-gray-400" />
-                  Move to
-                </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-1 border-gray-200" />
 
-                <DropdownMenuSeparator className="my-1 border-gray-200" />
-
-                <DropdownMenuItem
-                  onClick={() =>
-                    toast.info("Essential items cannot be deleted")
-                  }
-                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-400 transition-colors hover:bg-gray-50"
-                >
-                  <Trash2 className="size-4 text-gray-400" />
-                  Move to Trash
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                  <DropdownMenuItem
+                    onClick={handleDeleteEssential}
+                    className={`flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
+                      essential.isBuiltIn
+                        ? "text-gray-400 hover:bg-gray-50"
+                        : "text-red-600 hover:bg-red-50 hover:text-red-600 focus:bg-red-50 focus:text-red-600"
+                    }`}
+                  >
+                    <Trash2
+                      className={`size-4 ${essential.isBuiltIn ? "text-gray-400" : "text-red-600"}`}
+                    />
+                    {essential.isBuiltIn ? "Cannot Delete" : "Move to Trash"}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -449,7 +569,10 @@ export function DocumentSidebar({
 
   const FavoriteItemComponent = ({ favorite }: { favorite: any }) => {
     const { page } = favorite
-    const isSelected = currentPage?.id === page.id
+    // Handle highlighting for both essential and regular pages
+    const isSelected = page.id.startsWith("essential-")
+      ? selectedEssential === page.id.replace("essential-", "")
+      : currentPage?.id === page.id && !selectedEssential
 
     return (
       <div className="group relative">
@@ -467,7 +590,15 @@ export function DocumentSidebar({
 
           <div
             className="min-w-0 flex-1"
-            onClick={() => handlePageSelect(page.id)}
+            onClick={() => {
+              // Handle essential pages differently from regular pages
+              if (page.id.startsWith("essential-")) {
+                const essentialId = page.id.replace("essential-", "")
+                handleEssentialSelect(essentialId)
+              } else {
+                handlePageSelect(page.id)
+              }
+            }}
           >
             <div className="flex items-center gap-2">
               <div className="truncate text-sm font-medium">{page.title}</div>
@@ -552,7 +683,8 @@ export function DocumentSidebar({
   }
 
   const PageItemComponent = ({ page }: { page: SelectPage }) => {
-    const isSelected = currentPage?.id === page.id
+    // Only highlight if this page is selected AND no essential is currently selected
+    const isSelected = currentPage?.id === page.id && !selectedEssential
     const isPageFavorited = isFavorited(page.id)
 
     // Local state for this specific page item
@@ -918,6 +1050,9 @@ export function DocumentSidebar({
             title="Essentials"
             isExpanded={essentialsExpanded}
             onToggle={() => setEssentialsExpanded(!essentialsExpanded)}
+            showAddButton={true}
+            onAdd={handleCreateEssential}
+            isLoading={isCreatingEssential}
           />
           <AnimatePresence>
             {essentialsExpanded && (
@@ -928,9 +1063,49 @@ export function DocumentSidebar({
                 transition={{ duration: 0.2 }}
                 className="space-y-1 overflow-hidden p-2"
               >
-                {essentialsItems.map(item => (
-                  <EssentialItemComponent key={item.id} item={item} />
-                ))}
+                {essentialPages.length > 0 ? (
+                  essentialPages.map(essential => (
+                    <EssentialItemComponent
+                      key={essential.id}
+                      essential={essential}
+                    />
+                  ))
+                ) : !isCreatingEssential ? (
+                  <div className="px-5 py-8 text-center">
+                    <div className="space-y-3">
+                      <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-gray-100">
+                        <Star className="size-6 text-gray-400" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">
+                          No essential pages yet
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          Create your first essential page to get started
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCreateEssential}
+                        disabled={isCreatingEssential}
+                        className="text-xs"
+                      >
+                        {isCreatingEssential ? (
+                          <>
+                            <Plus className="mr-2 size-3" />
+                            Creating...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="mr-2 size-3" />
+                            Create Essential
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
               </motion.div>
             )}
           </AnimatePresence>
