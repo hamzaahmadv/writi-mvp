@@ -26,6 +26,7 @@ interface BlockRendererProps {
   isFocused: boolean
   isSelected: boolean
   level?: number
+  listNumber?: number
 }
 
 export function BlockRenderer({
@@ -33,7 +34,8 @@ export function BlockRenderer({
   actions,
   isFocused,
   isSelected,
-  level = 0
+  level = 0,
+  listNumber
 }: BlockRendererProps) {
   const [isToggleExpanded, setIsToggleExpanded] = useState(true)
   const [isHovered, setIsHovered] = useState(false)
@@ -492,8 +494,8 @@ export function BlockRenderer({
       case "numbered_list":
         return (
           <div className="flex items-center gap-3">
-            <div className="min-w-[20px] shrink-0 font-medium text-gray-500">
-              1.
+            <div className="min-w-[24px] shrink-0 font-medium text-gray-500">
+              {listNumber || 1}.
             </div>
             <div
               {...commonProps}
@@ -544,6 +546,7 @@ export function BlockRenderer({
                     isFocused={false}
                     isSelected={false}
                     level={level + 1}
+                    listNumber={undefined}
                   />
                 ))}
               </div>
