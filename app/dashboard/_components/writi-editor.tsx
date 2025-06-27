@@ -28,6 +28,7 @@ import {
 } from "@/types"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { useBlocks } from "@/lib/hooks/use-blocks"
+import { useFavorites } from "@/lib/hooks/use-favorites"
 import { SelectPage } from "@/db/schema"
 
 interface WritiEditorProps {
@@ -47,6 +48,9 @@ export default function WritiEditor({
 }: WritiEditorProps) {
   // Authentication
   const { userId, isLoaded: userLoaded } = useCurrentUser()
+
+  // Favorites management
+  const { toggleFavorite, isFavorited } = useFavorites(userId)
 
   // Blocks management - use database for regular pages, localStorage for essentials
   const {
@@ -769,9 +773,45 @@ export default function WritiEditor({
             variant="ghost"
             size="sm"
             className="size-8 rounded-md p-0 transition-colors hover:bg-gray-100"
-            title="Add to favorites"
+            title={
+              currentPage && isFavorited(currentPage.id)
+                ? "Remove from favorites"
+                : "Add to favorites"
+            }
+            onClick={() => {
+              if (!currentPage || !userId) {
+                return
+              }
+
+              // Send instant update to all components with page data
+              const isCurrentlyFavorited = isFavorited(currentPage.id)
+              const isAdding = !isCurrentlyFavorited
+
+              window.dispatchEvent(
+                new CustomEvent("favoritesChanged", {
+                  detail: {
+                    instantUpdate: true,
+                    pageId: currentPage.id,
+                    isAdding: isAdding,
+                    pageData: isAdding ? currentPage : null
+                  }
+                })
+              )
+
+              // Fire and forget - optimistic updates handle the UI instantly
+              toggleFavorite(currentPage.id).catch(error => {
+                console.error("Error toggling favorite:", error)
+              })
+            }}
           >
-            <Star className="size-4 text-gray-600" />
+            <Star
+              className="size-4 transition-all"
+              style={
+                currentPage && isFavorited(currentPage.id)
+                  ? { fill: "#fbbf24", color: "#fbbf24" } // yellow-400
+                  : { fill: "none", color: "#4b5563" } // gray-600
+              }
+            />
           </Button>
 
           <Button

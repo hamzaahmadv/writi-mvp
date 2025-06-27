@@ -50,6 +50,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { toast } from "sonner"
 import { UserProfileDropdown } from "./user-profile-dropdown"
+import { useFavorites } from "@/lib/hooks/use-favorites"
+import { useCurrentUser } from "@/lib/hooks/use-user"
 
 interface NavItem {
   id: string
@@ -108,12 +110,21 @@ export function DocumentSidebar({
   onEssentialSelect,
   selectedEssential
 }: DocumentSidebarProps) {
+  const { userId } = useCurrentUser()
+  const {
+    favorites: favoriteItems,
+    favoriteIds,
+    toggleFavorite,
+    isFavorited,
+    isLoading: favoritesLoading
+  } = useFavorites(userId)
+
   const [essentialsExpanded, setEssentialsExpanded] = useState(true)
+  const [favoritesExpanded, setFavoritesExpanded] = useState(true)
   const [documentsExpanded, setDocumentsExpanded] = useState(true)
   const [selectedItem, setSelectedItem] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
   const [showMessage, setShowMessage] = useState(true)
-  const [favorites, setFavorites] = useState<Set<string>>(new Set())
   const [isCreatingPage, setIsCreatingPage] = useState(false)
 
   useEffect(() => {
@@ -156,25 +167,34 @@ export function DocumentSidebar({
 
   // Page action handlers
   const handleToggleFavorite = async (page: SelectPage) => {
-    const isFavorited = favorites.has(page.id)
-    const newFavorites = new Set(favorites)
-
-    if (isFavorited) {
-      newFavorites.delete(page.id)
-      toast.success("Removed from favorites")
-    } else {
-      newFavorites.add(page.id)
-      toast.success("Added to favorites")
+    if (!userId) {
+      toast.error("Please sign in to favorite pages")
+      return
     }
 
-    setFavorites(newFavorites)
+    // Send instant update to all components with page data
+    const isCurrentlyFavorited = isFavorited(page.id)
+    const isAdding = !isCurrentlyFavorited
 
-    // Update page with favorite status
-    await onUpdatePage({
-      ...page
-      // You might want to add a favorites field to your schema
-      // For now, we'll store it locally
-    })
+    window.dispatchEvent(
+      new CustomEvent("favoritesChanged", {
+        detail: {
+          instantUpdate: true,
+          pageId: page.id,
+          isAdding: isAdding,
+          pageData: isAdding ? page : null
+        }
+      })
+    )
+
+    const result = await toggleFavorite(page.id)
+    if (result === true) {
+      toast.success("Added to favorites")
+    } else if (result === false) {
+      toast.success("Removed from favorites")
+    } else {
+      toast.error("Failed to toggle favorite")
+    }
   }
 
   const handleCopyLink = async (page: SelectPage) => {
@@ -427,9 +447,113 @@ export function DocumentSidebar({
     )
   }
 
+  const FavoriteItemComponent = ({ favorite }: { favorite: any }) => {
+    const { page } = favorite
+    const isSelected = currentPage?.id === page.id
+
+    return (
+      <div className="group relative">
+        <div
+          className={`
+            mx-2 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200
+            hover:bg-gray-100 ${
+              isSelected
+                ? "border border-blue-200 bg-blue-50 text-gray-900"
+                : "text-gray-600"
+            }
+          `}
+        >
+          <span className="shrink-0 text-sm">{page.emoji || "📝"}</span>
+
+          <div
+            className="min-w-0 flex-1"
+            onClick={() => handlePageSelect(page.id)}
+          >
+            <div className="flex items-center gap-2">
+              <div className="truncate text-sm font-medium">{page.title}</div>
+              <Star className="size-3 fill-yellow-400 text-yellow-400" />
+              {isSelected && <Check className="size-3 text-blue-600" />}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            {/* Quick Edit Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-6 p-0 text-gray-500 hover:text-gray-700"
+              onClick={e => {
+                e.stopPropagation()
+                // Could implement inline editing for favorites too
+                toast.info("Edit the page in Documents section")
+              }}
+              title="Edit in Documents"
+            >
+              <Edit className="size-3" />
+            </Button>
+
+            {/* 3-Dot Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="size-6 p-0 text-gray-500 hover:text-gray-700"
+                  onClick={e => e.stopPropagation()}
+                  title="More options"
+                >
+                  <MoreHorizontal className="size-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="w-48 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+                sideOffset={4}
+              >
+                <DropdownMenuItem
+                  onClick={() => handleToggleFavorite(page)}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                >
+                  <StarOff className="size-4 text-black" />
+                  Remove from Favorites
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => handleCopyLink(page)}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                >
+                  <Link className="size-4 text-black" />
+                  Copy Link
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() => handleDuplicatePage(page)}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
+                >
+                  <Copy className="size-4 text-black" />
+                  Duplicate
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1 border-gray-200" />
+
+                <DropdownMenuItem
+                  onClick={() => handleMoveToTrash(page)}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50 hover:text-red-600 focus:bg-red-50 focus:text-red-600"
+                >
+                  <Trash2 className="size-4 text-red-600" />
+                  Move to Trash
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const PageItemComponent = ({ page }: { page: SelectPage }) => {
     const isSelected = currentPage?.id === page.id
-    const isFavorited = favorites.has(page.id)
+    const isPageFavorited = isFavorited(page.id)
 
     // Local state for this specific page item
     const [isEditing, setIsEditing] = useState(false)
@@ -517,9 +641,6 @@ export function DocumentSidebar({
             >
               <div className="flex items-center gap-2">
                 <div className="truncate text-sm font-medium">{page.title}</div>
-                {isFavorited && (
-                  <Star className="size-3 fill-yellow-400 text-yellow-400" />
-                )}
                 {isSelected && <Check className="size-3 text-blue-600" />}
               </div>
             </div>
@@ -563,7 +684,7 @@ export function DocumentSidebar({
                     onClick={() => handleToggleFavorite(page)}
                     className="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-black transition-colors hover:bg-gray-50 hover:text-black focus:bg-gray-50 focus:text-black"
                   >
-                    {isFavorited ? (
+                    {isPageFavorited ? (
                       <>
                         <StarOff className="size-4 text-black" />
                         Remove from Favorites
@@ -753,6 +874,44 @@ export function DocumentSidebar({
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
+        {/* Favorites Section */}
+        {favoriteItems.length > 0 && (
+          <div className="mt-3">
+            <SectionHeader
+              title="Favorites"
+              isExpanded={favoritesExpanded}
+              onToggle={() => setFavoritesExpanded(!favoritesExpanded)}
+            />
+            <AnimatePresence>
+              {favoritesExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-1 overflow-hidden p-2"
+                >
+                  {favoritesLoading ? (
+                    <div className="px-5 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                        <Star className="size-4" />
+                        Loading favorites...
+                      </div>
+                    </div>
+                  ) : (
+                    favoriteItems.map(favorite => (
+                      <FavoriteItemComponent
+                        key={favorite.id}
+                        favorite={favorite}
+                      />
+                    ))
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+
         {/* Essentials Section */}
         <div className="mt-3">
           <SectionHeader
