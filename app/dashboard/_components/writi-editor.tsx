@@ -70,10 +70,12 @@ export default function WritiEditor({
   // Load essential blocks from localStorage instantly
   useEffect(() => {
     if (isEssential && currentPage?.id) {
+      setEssentialLoading(true)
       const saved = localStorage.getItem(`essential-blocks-${currentPage.id}`)
       if (saved) {
         try {
-          setEssentialBlocks(JSON.parse(saved))
+          const parsed = JSON.parse(saved)
+          setEssentialBlocks(parsed)
         } catch (error) {
           console.error("Error loading essential blocks:", error)
           setEssentialBlocks([])
@@ -81,17 +83,30 @@ export default function WritiEditor({
       } else {
         setEssentialBlocks([])
       }
+      setEssentialLoading(false)
+    } else if (!isEssential) {
+      // Clear essential blocks when switching to database mode
+      setEssentialBlocks([])
+      setEssentialLoading(false)
     }
   }, [isEssential, currentPage?.id])
 
-  // Save essential blocks to localStorage
+  // Save essential blocks to localStorage with better error handling
   const saveEssentialBlocks = useCallback(
     (blocks: Block[]) => {
       if (isEssential && currentPage?.id) {
-        localStorage.setItem(
-          `essential-blocks-${currentPage.id}`,
-          JSON.stringify(blocks)
-        )
+        try {
+          localStorage.setItem(
+            `essential-blocks-${currentPage.id}`,
+            JSON.stringify(blocks)
+          )
+        } catch (error) {
+          console.error(
+            "Failed to save essential blocks to localStorage:",
+            error
+          )
+          // Could implement fallback storage or user notification here
+        }
       }
     },
     [isEssential, currentPage?.id]
@@ -178,17 +193,25 @@ export default function WritiEditor({
 
       setEssentialBlocks(prev => {
         const newBlocks = [...prev]
+
         if (afterId) {
           const afterIndex = newBlocks.findIndex(b => b.id === afterId)
           if (afterIndex !== -1) {
             newBlocks.splice(afterIndex + 1, 0, newBlock)
           } else {
+            // If afterId not found, append to end
             newBlocks.push(newBlock)
           }
         } else {
+          // No afterId specified, append to end
           newBlocks.push(newBlock)
         }
-        saveEssentialBlocks(newBlocks)
+
+        // Save to localStorage asynchronously to avoid blocking UI
+        requestAnimationFrame(() => {
+          saveEssentialBlocks(newBlocks)
+        })
+
         return newBlocks
       })
 
@@ -200,10 +223,33 @@ export default function WritiEditor({
   const updateEssentialBlock = useCallback(
     async (id: string, updates: Partial<Block>): Promise<void> => {
       setEssentialBlocks(prev => {
-        const newBlocks = prev.map(block =>
-          block.id === id ? { ...block, ...updates } : block
-        )
-        saveEssentialBlocks(newBlocks)
+        // Check if the block actually exists and needs updating
+        const blockIndex = prev.findIndex(block => block.id === id)
+        if (blockIndex === -1) {
+          console.warn(`Block with id ${id} not found in essential blocks`)
+          return prev
+        }
+
+        const existingBlock = prev[blockIndex]
+
+        // Check if there are actual changes to avoid unnecessary updates
+        const hasChanges = Object.keys(updates).some(key => {
+          const typedKey = key as keyof Block
+          return existingBlock[typedKey] !== updates[typedKey]
+        })
+
+        if (!hasChanges) {
+          return prev // No changes, return previous state
+        }
+
+        const newBlocks = [...prev]
+        newBlocks[blockIndex] = { ...existingBlock, ...updates }
+
+        // Save to localStorage asynchronously to avoid blocking UI
+        requestAnimationFrame(() => {
+          saveEssentialBlocks(newBlocks)
+        })
+
         return newBlocks
       })
     },
@@ -213,8 +259,19 @@ export default function WritiEditor({
   const deleteEssentialBlock = useCallback(
     async (id: string): Promise<void> => {
       setEssentialBlocks(prev => {
+        const blockExists = prev.some(block => block.id === id)
+        if (!blockExists) {
+          console.warn(`Block with id ${id} not found for deletion`)
+          return prev
+        }
+
         const newBlocks = prev.filter(block => block.id !== id)
-        saveEssentialBlocks(newBlocks)
+
+        // Save to localStorage asynchronously to avoid blocking UI
+        requestAnimationFrame(() => {
+          saveEssentialBlocks(newBlocks)
+        })
+
         return newBlocks
       })
     },
@@ -232,17 +289,33 @@ export default function WritiEditor({
         const dragIndex = newBlocks.findIndex(b => b.id === dragId)
         const hoverIndex = newBlocks.findIndex(b => b.id === hoverId)
 
-        if (dragIndex !== -1 && hoverIndex !== -1) {
-          const dragBlock = newBlocks[dragIndex]
-          newBlocks.splice(dragIndex, 1)
-
-          const newHoverIndex = newBlocks.findIndex(b => b.id === hoverId)
-          const insertIndex =
-            position === "before" ? newHoverIndex : newHoverIndex + 1
-          newBlocks.splice(insertIndex, 0, dragBlock)
+        if (dragIndex === -1) {
+          console.warn(`Drag block with id ${dragId} not found`)
+          return prev
         }
 
-        saveEssentialBlocks(newBlocks)
+        if (hoverIndex === -1) {
+          console.warn(`Hover block with id ${hoverId} not found`)
+          return prev
+        }
+
+        if (dragIndex === hoverIndex) {
+          return prev // No movement needed
+        }
+
+        const dragBlock = newBlocks[dragIndex]
+        newBlocks.splice(dragIndex, 1)
+
+        const newHoverIndex = newBlocks.findIndex(b => b.id === hoverId)
+        const insertIndex =
+          position === "before" ? newHoverIndex : newHoverIndex + 1
+        newBlocks.splice(insertIndex, 0, dragBlock)
+
+        // Save to localStorage asynchronously to avoid blocking UI
+        requestAnimationFrame(() => {
+          saveEssentialBlocks(newBlocks)
+        })
+
         return newBlocks
       })
     },
@@ -526,10 +599,17 @@ export default function WritiEditor({
       async (command: SlashCommand, blockId: string) => {
         try {
           // Update the block type and clear content
-          await updateBlockInDb(blockId, {
-            type: command.blockType,
-            content: ""
-          })
+          if (isEssential) {
+            await updateEssentialBlock(blockId, {
+              type: command.blockType,
+              content: ""
+            })
+          } else {
+            await updateBlockInDb(blockId, {
+              type: command.blockType,
+              content: ""
+            })
+          }
 
           setEditorState(prev => ({
             ...prev,
@@ -541,7 +621,7 @@ export default function WritiEditor({
           console.error("Failed to execute slash command:", error)
         }
       },
-      [updateBlockInDb]
+      [isEssential, updateEssentialBlock, updateBlockInDb]
     )
   }
 

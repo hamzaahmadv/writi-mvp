@@ -81,15 +81,36 @@ export function DraggableBlockList({
         strategy={verticalListSortingStrategy}
       >
         <div className="space-y-1">
-          {blocks.map(block => (
-            <BlockRenderer
-              key={block.id}
-              block={block}
-              actions={actions}
-              isFocused={editorState.focusedBlockId === block.id}
-              isSelected={editorState.selectedBlockIds.includes(block.id)}
-            />
-          ))}
+          {blocks.map((block, index) => {
+            // Calculate list number for numbered_list blocks
+            let listNumber: number | undefined
+
+            if (block.type === "numbered_list") {
+              // Find the start of the current numbered list sequence
+              let sequenceStart = index
+              for (let i = index - 1; i >= 0; i--) {
+                if (blocks[i].type === "numbered_list") {
+                  sequenceStart = i
+                } else {
+                  break // Stop when we hit a non-numbered_list block
+                }
+              }
+
+              // Calculate position in sequence (1-based)
+              listNumber = index - sequenceStart + 1
+            }
+
+            return (
+              <BlockRenderer
+                key={block.id}
+                block={block}
+                actions={actions}
+                isFocused={editorState.focusedBlockId === block.id}
+                isSelected={editorState.selectedBlockIds.includes(block.id)}
+                listNumber={listNumber}
+              />
+            )
+          })}
         </div>
       </SortableContext>
     </DndContext>
