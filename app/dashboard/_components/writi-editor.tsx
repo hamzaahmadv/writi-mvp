@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
 import {
   MoreHorizontal,
@@ -11,7 +11,10 @@ import {
   Eye,
   EyeOff,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Smile,
+  Image,
+  Plus
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -19,6 +22,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { BlockRenderer } from "./blocks/block-renderer"
 import { DraggableBlockList } from "./blocks/draggable-block-list"
 import { SlashCommandMenu } from "./blocks/slash-command-menu"
+import PageIcon from "./page-icon"
 import {
   Block,
   BlockType,
@@ -131,6 +135,11 @@ export default function WritiEditor({
     slashMenuQuery: ""
   })
 
+  // Title editing state
+  const [titleIsFocused, setTitleIsFocused] = useState(false)
+  const [titleIsEmpty, setTitleIsEmpty] = useState(false)
+  const titleRef = useRef<HTMLHeadingElement>(null)
+
   // Sync blocks from database to local state
   useEffect(() => {
     setEditorState(prev => ({
@@ -138,6 +147,32 @@ export default function WritiEditor({
       blocks: currentBlocks
     }))
   }, [currentBlocks])
+
+  // Auto-focus title for new pages and check if title is empty
+  useEffect(() => {
+    if (currentPage) {
+      const isEmpty =
+        currentPage.title === "New Page" ||
+        currentPage.title === "Untitled" ||
+        !currentPage.title.trim()
+      setTitleIsEmpty(isEmpty)
+
+      // Auto-focus title for new pages
+      if (isEmpty && titleRef.current && !titleIsFocused) {
+        setTimeout(() => {
+          titleRef.current?.focus()
+          // Select all text
+          const range = document.createRange()
+          const selection = window.getSelection()
+          if (titleRef.current && selection) {
+            range.selectNodeContents(titleRef.current)
+            selection.removeAllRanges()
+            selection.addRange(range)
+          }
+        }, 100)
+      }
+    }
+  }, [currentPage?.id, currentPage?.title, titleIsFocused])
 
   // Check if welcome content has been created for this page (using localStorage for persistence)
   const getWelcomeContentKey = (pageId: string, isEssential: boolean) => {
@@ -335,49 +370,20 @@ export default function WritiEditor({
     [isEssential, moveEssentialBlock, moveBlockInDb]
   )
 
-  // Clean up duplicate welcome blocks if they exist
+  // Mark initial content as created if we have blocks and haven't marked it yet
   useEffect(() => {
     if (currentPage && currentBlocks.length > 0 && !currentBlocksLoading) {
-      const welcomeBlocks = currentBlocks.filter(
-        block =>
-          block.content.includes("Welcome to Writi!") &&
-          block.type === "heading_1"
-      )
-
-      // If we have multiple welcome blocks, remove duplicates (keep only the first one)
-      if (welcomeBlocks.length > 1) {
-        const blocksToDelete = welcomeBlocks.slice(1) // Keep first, remove rest
-
-        blocksToDelete.forEach(async block => {
-          try {
-            if (isEssential) {
-              await deleteEssentialBlock(block.id)
-            } else {
-              await deleteBlockInDb(block.id)
-            }
-          } catch (error) {
-            console.error("Failed to delete duplicate welcome block:", error)
-          }
-        })
-      }
-
       // Mark welcome content as created if we have any content and haven't marked it yet
-      if (
-        currentBlocks.length > 0 &&
-        !hasWelcomeContentBeenCreated(currentPage.id)
-      ) {
+      if (!hasWelcomeContentBeenCreated(currentPage.id)) {
         markWelcomeContentCreated(currentPage.id)
       }
     }
   }, [
     currentPage?.id,
-    currentBlocks,
+    currentBlocks.length,
     currentBlocksLoading,
-    isEssential,
     hasWelcomeContentBeenCreated,
-    markWelcomeContentCreated,
-    deleteEssentialBlock,
-    deleteBlockInDb
+    markWelcomeContentCreated
   ])
 
   // Create initial welcome content only for truly new pages (never had content before)
@@ -400,11 +406,8 @@ export default function WritiEditor({
             updateEssentialBlock(blockId, {
               content:
                 currentPage.id === "essential-todo"
-                  ? "📋 To-do List / Planner"
-                  : "🚀 Getting Started",
-              props: {
-                emoji: currentPage.id === "essential-todo" ? "📋" : "🚀"
-              }
+                  ? "To-do List / Planner"
+                  : "Getting Started"
             })
             // Create a paragraph block below
             setTimeout(() => {
@@ -422,23 +425,12 @@ export default function WritiEditor({
           }
         })
       } else {
-        createBlockInDb(undefined, "heading_1").then(blockId => {
+        // Create a simple paragraph block for new pages
+        createBlockInDb(undefined, "paragraph").then(blockId => {
           if (blockId) {
             updateBlockInDb(blockId, {
-              content: "Welcome to Writi! 🚀",
-              props: { emoji: "🚀" }
+              content: ""
             })
-            // Create a paragraph block below
-            setTimeout(() => {
-              createBlockInDb(blockId, "paragraph").then(paragraphId => {
-                if (paragraphId) {
-                  updateBlockInDb(paragraphId, {
-                    content:
-                      "Start typing here or press '/' to add different types of content blocks..."
-                  })
-                }
-              })
-            }, 100)
           }
         })
       }
@@ -908,17 +900,101 @@ export default function WritiEditor({
       {/* Editor Content */}
       <div className="flex-1 overflow-auto bg-white">
         <div className="mx-auto max-w-3xl px-6 py-8">
-          {/* Page Icon & Title */}
+          {/* Page Icon */}
+          <PageIcon
+            currentIcon={currentPage.emoji || undefined}
+            onIconSelect={(emoji: string) => {
+              onUpdatePage({ emoji })
+            }}
+            onIconRemove={() => {
+              onUpdatePage({ emoji: null })
+            }}
+          />
+
+          {/* Top UI Bar Elements */}
+          <div className="mb-6 flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center space-x-2 rounded-md px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100"
+              onClick={() => {
+                // TODO: Implement cover image upload
+                console.log("Add cover")
+              }}
+            >
+              <Image className="size-4" />
+              <span>Add cover</span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center space-x-2 rounded-md px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100"
+              onClick={() => {
+                // TODO: Implement comments system
+                console.log("Add comment")
+              }}
+            >
+              <MessageSquare className="size-4" />
+              <span>Add comment</span>
+            </Button>
+          </div>
+
+          {/* Page Title */}
           <div className="mb-8">
-            <div className="mb-4 flex items-center space-x-3">
-              <span className="text-5xl" role="img" aria-label="page emoji">
-                {currentPage.emoji || "📝"}
-              </span>
-            </div>
             <h1
-              className="mb-2 text-4xl font-bold text-gray-900 outline-none"
+              ref={titleRef}
+              className={`mb-2 text-4xl font-bold outline-none transition-colors ${
+                titleIsEmpty && !titleIsFocused
+                  ? "text-gray-400"
+                  : "text-gray-900"
+              }`}
               contentEditable
               suppressContentEditableWarning={true}
+              onFocus={() => {
+                setTitleIsFocused(true)
+                // If the title is placeholder text, select all for easy replacement
+                if (titleIsEmpty) {
+                  setTimeout(() => {
+                    const range = document.createRange()
+                    const selection = window.getSelection()
+                    if (titleRef.current && selection) {
+                      range.selectNodeContents(titleRef.current)
+                      selection.removeAllRanges()
+                      selection.addRange(range)
+                    }
+                  }, 0)
+                }
+              }}
+              onBlur={e => {
+                setTitleIsFocused(false)
+                const newTitle =
+                  e.currentTarget.textContent?.trim() || "New Page"
+                setTitleIsEmpty(
+                  newTitle === "New Page" ||
+                    newTitle === "Untitled" ||
+                    !newTitle.trim()
+                )
+                if (newTitle !== currentPage.title) {
+                  onUpdatePage({ title: newTitle })
+                }
+              }}
+              onKeyDown={e => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  // Blur the title to save it, then create a new paragraph block
+                  titleRef.current?.blur()
+                  setTimeout(() => {
+                    actions.createBlock(undefined, "paragraph")
+                  }, 100)
+                }
+              }}
+              onInput={e => {
+                const content = e.currentTarget.textContent?.trim() || ""
+                setTitleIsEmpty(
+                  !content || content === "New Page" || content === "Untitled"
+                )
+              }}
               onPaste={e => {
                 e.preventDefault()
                 const plainText = e.clipboardData.getData("text/plain")
@@ -936,18 +1012,12 @@ export default function WritiEditor({
                   }
                 }
               }}
-              onBlur={e => {
-                const newTitle = e.currentTarget.textContent || "Untitled"
-                if (newTitle !== currentPage.title) {
-                  onUpdatePage({ title: newTitle })
-                }
-              }}
               style={{
                 fontFamily: "var(--font-body)",
                 lineHeight: "1.2"
               }}
             >
-              {currentPage.title}
+              {currentPage.title || "New Page"}
             </h1>
           </div>
 

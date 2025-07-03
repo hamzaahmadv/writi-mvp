@@ -170,7 +170,7 @@ export function DocumentSidebar({
 
     setIsCreatingPage(true)
     try {
-      const newPage = await onCreatePage("Untitled", "📝")
+      const newPage = await onCreatePage("New Page")
       if (newPage) {
         handlePageSelect(newPage.id)
         toast.success("New page created")
@@ -190,7 +190,7 @@ export function DocumentSidebar({
 
     setIsCreatingEssential(true)
     try {
-      const newEssential = await onCreateEssential("New Essential", "⭐")
+      const newEssential = await onCreateEssential("New Essential")
       if (newEssential) {
         handleEssentialSelect(newEssential.id)
         toast.success("New essential page created")
@@ -456,8 +456,6 @@ export function DocumentSidebar({
             }
           `}
         >
-          <span className="shrink-0 text-sm">{essential.emoji}</span>
-
           {isEditing ? (
             <Input
               ref={inputRef}
@@ -586,8 +584,6 @@ export function DocumentSidebar({
             }
           `}
         >
-          <span className="shrink-0 text-sm">{page.emoji || "📝"}</span>
-
           <div
             className="min-w-0 flex-1"
             onClick={() => {
@@ -755,8 +751,6 @@ export function DocumentSidebar({
             }
           `}
         >
-          <span className="shrink-0 text-sm">{page.emoji || "📝"}</span>
-
           {isEditing ? (
             <Input
               ref={inputRef}
