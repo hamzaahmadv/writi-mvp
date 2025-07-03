@@ -8,12 +8,14 @@ Component that displays the current page icon or "Add icon" button and triggers 
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Plus, Smile } from "lucide-react"
+import { Plus, Smile, LucideIcon } from "lucide-react"
+import * as LucideIcons from "lucide-react"
 import IconPicker from "./icon-picker"
+import { PageIcon as PageIconType } from "@/types"
 
 interface PageIconProps {
-  currentIcon?: string
-  onIconSelect: (emoji: string) => void
+  currentIcon?: PageIconType
+  onIconSelect: (icon: PageIconType) => void
   onIconRemove: () => void
 }
 
@@ -24,19 +26,43 @@ export default function PageIcon({
 }: PageIconProps) {
   const [isPickerOpen, setIsPickerOpen] = useState(false)
 
+  // Helper to render the current icon
+  const renderCurrentIcon = () => {
+    if (!currentIcon) return null
+
+    if (currentIcon.type === "emoji") {
+      return (
+        <div className="text-6xl transition-transform group-hover:scale-110">
+          {currentIcon.value}
+        </div>
+      )
+    }
+
+    if (currentIcon.type === "icon") {
+      const IconComponent = (LucideIcons as any)[currentIcon.name] as LucideIcon
+      if (IconComponent) {
+        return (
+          <IconComponent
+            className={`text- size-12${currentIcon.color || "gray-600"} transition-transform group-hover:scale-110`}
+          />
+        )
+      }
+    }
+
+    return null
+  }
+
   return (
     <>
       <div className="mb-4 flex justify-center">
         {currentIcon ? (
-          // Show the current emoji icon
+          // Show the current icon (emoji or Lucide icon)
           <button
             onClick={() => setIsPickerOpen(true)}
             className="group rounded-lg p-2 transition-colors hover:bg-gray-100"
             title="Change icon"
           >
-            <div className="text-6xl transition-transform group-hover:scale-110">
-              {currentIcon}
-            </div>
+            {renderCurrentIcon()}
           </button>
         ) : (
           // Show "Add icon" button
