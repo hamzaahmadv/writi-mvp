@@ -28,7 +28,8 @@ import {
   BlockType,
   EditorState,
   EditorActions,
-  SlashCommand
+  SlashCommand,
+  PageIcon as PageIconType
 } from "@/types"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { useBlocks } from "@/lib/hooks/use-blocks"
@@ -902,12 +903,22 @@ export default function WritiEditor({
         <div className="mx-auto max-w-3xl px-6 py-8">
           {/* Page Icon */}
           <PageIcon
-            currentIcon={currentPage.emoji || undefined}
-            onIconSelect={(emoji: string) => {
-              onUpdatePage({ emoji })
+            currentIcon={
+              currentPage.icon
+                ? JSON.parse(currentPage.icon)
+                : currentPage.emoji
+                  ? { type: "emoji", value: currentPage.emoji }
+                  : undefined
+            }
+            onIconSelect={icon => {
+              if (icon.type === "emoji") {
+                onUpdatePage({ emoji: icon.value, icon: null })
+              } else {
+                onUpdatePage({ icon: JSON.stringify(icon), emoji: null })
+              }
             }}
             onIconRemove={() => {
-              onUpdatePage({ emoji: null })
+              onUpdatePage({ emoji: null, icon: null })
             }}
           />
 

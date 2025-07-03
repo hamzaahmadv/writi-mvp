@@ -52,6 +52,7 @@ export function usePage(userId: string | null): UsePageResult {
             userId,
             title: "Welcome to Writi",
             emoji: null,
+            icon: null,
             createdAt: new Date(),
             updatedAt: new Date()
           }

@@ -15,15 +15,18 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Smile, Image, Upload, Trash2, Shuffle } from "lucide-react"
+import { Smile, Star, Upload, Trash2, Shuffle } from "lucide-react"
 import EmojiGrid from "./emoji-grid"
+import IconGrid from "./icon-grid"
 import { useRecentEmojis } from "@/lib/hooks/use-recent-emojis"
+import { useRecentIcons } from "@/lib/hooks/use-recent-icons"
+import { PageIcon, IconColor } from "@/types"
 
 interface IconPickerProps {
   isOpen: boolean
   onClose: () => void
-  currentIcon?: string
-  onIconSelect: (emoji: string) => void
+  currentIcon?: PageIcon
+  onIconSelect: (icon: PageIcon) => void
   onIconRemove: () => void
 }
 
@@ -35,11 +38,20 @@ export default function IconPicker({
   onIconRemove
 }: IconPickerProps) {
   const [activeTab, setActiveTab] = useState("emoji")
+  const [selectedColor, setSelectedColor] = useState<IconColor>("gray-600")
   const { recentEmojis, addRecentEmoji } = useRecentEmojis()
+  const { recentIcons, addRecentIcon } = useRecentIcons()
 
   const handleEmojiSelect = (emoji: string) => {
     addRecentEmoji(emoji)
-    onIconSelect(emoji)
+    onIconSelect({ type: "emoji", value: emoji })
+    onClose()
+  }
+
+  const handleIconSelect = (iconName: string, color?: string) => {
+    const iconColor = color || selectedColor
+    addRecentIcon(iconName, iconColor)
+    onIconSelect({ type: "icon", name: iconName, color: iconColor })
     onClose()
   }
 
@@ -83,9 +95,8 @@ export default function IconPicker({
             <TabsTrigger
               value="icons"
               className="flex items-center space-x-2 rounded-none border-0 bg-transparent pb-3 text-gray-500 data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:font-medium data-[state=active]:text-black"
-              disabled
             >
-              <Image className="size-4" />
+              <Star className="size-4" />
               <span>Icons</span>
             </TabsTrigger>
             <TabsTrigger
@@ -106,15 +117,12 @@ export default function IconPicker({
           </TabsContent>
 
           <TabsContent value="icons" className="mt-4 bg-white">
-            <div className="flex h-96 items-center justify-center text-gray-500">
-              <div className="text-center">
-                <Image className="mx-auto size-12 text-gray-300" />
-                <p className="mt-3 text-sm">Icons coming soon</p>
-                <p className="mt-1 text-xs text-gray-400">
-                  This feature will be available in a future update
-                </p>
-              </div>
-            </div>
+            <IconGrid
+              onIconSelect={handleIconSelect}
+              recentIcons={recentIcons}
+              selectedColor={selectedColor}
+              onColorChange={setSelectedColor}
+            />
           </TabsContent>
 
           <TabsContent value="upload" className="mt-4 bg-white">

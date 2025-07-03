@@ -11,6 +11,7 @@ export const pagesTable = pgTable("pages", {
   userId: text("user_id").notNull(),
   title: text("title").notNull().default("New Page"),
   emoji: text("emoji"),
+  icon: text("icon"), // JSON string for { type: 'icon', name: string, color?: string }
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
