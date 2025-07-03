@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Smile, Star, Upload, Trash2, Shuffle } from "lucide-react"
 import EmojiGrid from "./emoji-grid"
 import IconGrid from "./icon-grid"
+import UploadIconTab from "./upload-icon-tab"
 import { useRecentEmojis } from "@/lib/hooks/use-recent-emojis"
 import { useRecentIcons } from "@/lib/hooks/use-recent-icons"
 import { PageIcon, IconColor } from "@/types"
@@ -102,7 +103,6 @@ export default function IconPicker({
             <TabsTrigger
               value="upload"
               className="flex items-center space-x-2 rounded-none border-0 bg-transparent pb-3 text-gray-500 data-[state=active]:border-b-2 data-[state=active]:border-black data-[state=active]:font-medium data-[state=active]:text-black"
-              disabled
             >
               <Upload className="size-4" />
               <span>Upload</span>
@@ -126,15 +126,13 @@ export default function IconPicker({
           </TabsContent>
 
           <TabsContent value="upload" className="mt-4 bg-white">
-            <div className="flex h-96 items-center justify-center text-gray-500">
-              <div className="text-center">
-                <Upload className="mx-auto size-12 text-gray-300" />
-                <p className="mt-3 text-sm">Upload images coming soon</p>
-                <p className="mt-1 text-xs text-gray-400">
-                  This feature will be available in a future update
-                </p>
-              </div>
-            </div>
+            <UploadIconTab
+              onIconSelect={icon => {
+                onIconSelect(icon)
+                onClose()
+              }}
+              onClose={onClose}
+            />
           </TabsContent>
         </Tabs>
 
