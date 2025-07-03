@@ -23,6 +23,7 @@ import { BlockRenderer } from "./blocks/block-renderer"
 import { DraggableBlockList } from "./blocks/draggable-block-list"
 import { SlashCommandMenu } from "./blocks/slash-command-menu"
 import PageIcon from "./page-icon"
+import IconPicker from "./icon-picker"
 import {
   Block,
   BlockType,
@@ -140,6 +141,9 @@ export default function WritiEditor({
   const [titleIsFocused, setTitleIsFocused] = useState(false)
   const [titleIsEmpty, setTitleIsEmpty] = useState(false)
   const titleRef = useRef<HTMLHeadingElement>(null)
+
+  // Icon picker state
+  const [isIconPickerOpen, setIsIconPickerOpen] = useState(false)
 
   // Sync blocks from database to local state
   useEffect(() => {
@@ -901,61 +905,71 @@ export default function WritiEditor({
       {/* Editor Content */}
       <div className="flex-1 overflow-auto bg-white">
         <div className="mx-auto max-w-3xl px-6 py-8">
-          {/* Page Icon */}
-          <PageIcon
-            currentIcon={
-              currentPage.icon
-                ? JSON.parse(currentPage.icon)
-                : currentPage.emoji
-                  ? { type: "emoji", value: currentPage.emoji }
-                  : undefined
-            }
-            onIconSelect={icon => {
-              if (icon.type === "emoji") {
-                onUpdatePage({ emoji: icon.value, icon: null })
-              } else {
-                onUpdatePage({ icon: JSON.stringify(icon), emoji: null })
+          {/* Page Icon - Only show if it exists */}
+          {(currentPage.icon || currentPage.emoji) && (
+            <PageIcon
+              currentIcon={
+                currentPage.icon
+                  ? JSON.parse(currentPage.icon)
+                  : currentPage.emoji
+                    ? { type: "emoji", value: currentPage.emoji }
+                    : undefined
               }
-            }}
-            onIconRemove={() => {
-              onUpdatePage({ emoji: null, icon: null })
-            }}
-          />
-
-          {/* Top UI Bar Elements */}
-          <div className="mb-6 flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center space-x-2 rounded-md px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100"
-              onClick={() => {
-                // TODO: Implement cover image upload
-                console.log("Add cover")
+              onIconSelect={icon => {
+                if (icon.type === "emoji") {
+                  onUpdatePage({ emoji: icon.value, icon: null })
+                } else {
+                  onUpdatePage({ icon: JSON.stringify(icon), emoji: null })
+                }
               }}
-            >
-              <Image className="size-4" />
-              <span>Add cover</span>
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex items-center space-x-2 rounded-md px-3 py-2 text-sm text-gray-600 transition-colors hover:bg-gray-100"
-              onClick={() => {
-                // TODO: Implement comments system
-                console.log("Add comment")
+              onIconRemove={() => {
+                onUpdatePage({ emoji: null, icon: null })
               }}
-            >
-              <MessageSquare className="size-4" />
-              <span>Add comment</span>
-            </Button>
-          </div>
+            />
+          )}
 
-          {/* Page Title */}
-          <div className="mb-8">
+          {/* Notion-style Page Header - Left Aligned */}
+          <div className="mt-8 flex flex-col pl-8">
+            {/* Top Controls Row - Add icon, Add cover, Add comment */}
+            <div className="flex gap-6 text-sm text-gray-500">
+              {/* Add Icon Button */}
+              <button
+                className="inline-flex cursor-pointer items-center gap-1 text-sm text-gray-500 transition hover:text-black"
+                onClick={() => setIsIconPickerOpen(true)}
+              >
+                <Smile className="size-4" />
+                <span>Add icon</span>
+              </button>
+
+              {/* Add Cover Button */}
+              <button
+                className="inline-flex cursor-pointer items-center gap-1 text-sm text-gray-500 transition hover:text-black"
+                onClick={() => {
+                  // TODO: Implement cover image upload
+                  console.log("Add cover")
+                }}
+              >
+                <Image className="size-4" />
+                <span>Add cover</span>
+              </button>
+
+              {/* Add Comment Button */}
+              <button
+                className="inline-flex cursor-pointer items-center gap-1 text-sm text-gray-500 transition hover:text-black"
+                onClick={() => {
+                  // TODO: Implement comments system
+                  console.log("Add comment")
+                }}
+              >
+                <MessageSquare className="size-4" />
+                <span>Add comment</span>
+              </button>
+            </div>
+
+            {/* Page Title */}
             <h1
               ref={titleRef}
-              className={`mb-2 text-4xl font-bold outline-none transition-colors ${
+              className={`mt-2 text-4xl font-bold outline-none transition-colors ${
                 titleIsEmpty && !titleIsFocused
                   ? "text-gray-400"
                   : "text-gray-900"
@@ -1028,64 +1042,67 @@ export default function WritiEditor({
                 lineHeight: "1.2"
               }}
             >
-              {currentPage.title || "New Page"}
+              {currentPage.title || "New page"}
             </h1>
           </div>
 
-          {/* Blocks Content */}
-          <DraggableBlockList
-            blocks={currentBlocks}
-            actions={actions}
-            editorState={editorState}
-            onMoveBlock={handleMoveBlock}
-          />
+          {/* Content Area with proper spacing */}
+          <div className="mt-8">
+            {/* Blocks Content */}
+            <DraggableBlockList
+              blocks={currentBlocks}
+              actions={actions}
+              editorState={editorState}
+              onMoveBlock={handleMoveBlock}
+            />
 
-          {/* Empty state */}
-          {currentBlocks.length === 0 && !currentBlocksLoading && (
-            <div className="py-16 text-center text-gray-500">
-              <div className="space-y-3">
-                <div className="text-4xl">✍️</div>
-                <div>
-                  <p className="text-lg font-medium text-gray-600">
-                    Start writing...
-                  </p>
-                  <p className="mt-1 text-sm text-gray-400">
-                    Press '/' for commands, or just start typing
-                  </p>
+            {/* Empty state */}
+            {currentBlocks.length === 0 && !currentBlocksLoading && (
+              <div className="py-16 text-center text-gray-500">
+                <div className="space-y-3">
+                  <div className="text-4xl">✍️</div>
+                  <div>
+                    <p className="text-lg font-medium text-gray-600">
+                      Start writing...
+                    </p>
+                    <p className="mt-1 text-sm text-gray-400">
+                      Press '/' for commands, or just start typing
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Add new block area */}
-          <div
-            className="group cursor-text py-4"
-            onClick={() => {
-              if (currentBlocks.length > 0) {
-                actions.createBlock(
-                  currentBlocks[currentBlocks.length - 1].id,
-                  "paragraph"
-                )
-              } else {
-                actions.createBlock(undefined, "paragraph")
-              }
-            }}
-          >
-            <div className="flex items-center text-gray-400 opacity-0 transition-opacity group-hover:opacity-100">
-              <svg
-                className="mr-2 size-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              <span className="text-sm">Add a block</span>
+            {/* Add new block area */}
+            <div
+              className="group cursor-text py-4"
+              onClick={() => {
+                if (currentBlocks.length > 0) {
+                  actions.createBlock(
+                    currentBlocks[currentBlocks.length - 1].id,
+                    "paragraph"
+                  )
+                } else {
+                  actions.createBlock(undefined, "paragraph")
+                }
+              }}
+            >
+              <div className="flex items-center text-gray-400 opacity-0 transition-opacity group-hover:opacity-100">
+                <svg
+                  className="mr-2 size-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
+                </svg>
+                <span className="text-sm">Add a block</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1116,6 +1133,31 @@ export default function WritiEditor({
           </div>
         </div>
       )}
+
+      {/* Icon Picker for Add Icon functionality */}
+      <IconPicker
+        isOpen={isIconPickerOpen}
+        onClose={() => setIsIconPickerOpen(false)}
+        currentIcon={
+          currentPage.icon
+            ? JSON.parse(currentPage.icon)
+            : currentPage.emoji
+              ? { type: "emoji", value: currentPage.emoji }
+              : undefined
+        }
+        onIconSelect={icon => {
+          if (icon.type === "emoji") {
+            onUpdatePage({ emoji: icon.value, icon: null })
+          } else {
+            onUpdatePage({ icon: JSON.stringify(icon), emoji: null })
+          }
+          setIsIconPickerOpen(false)
+        }}
+        onIconRemove={() => {
+          onUpdatePage({ emoji: null, icon: null })
+          setIsIconPickerOpen(false)
+        }}
+      />
     </div>
   )
 }
