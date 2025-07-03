@@ -1004,14 +1004,29 @@ export default function WritiEditor({
                   onUpdatePage({ title: newTitle })
                 }
               }}
-              onKeyDown={e => {
+              onKeyDown={async e => {
                 if (e.key === "Enter") {
                   e.preventDefault()
-                  // Blur the title to save it, then create a new paragraph block
+
+                  // Save title immediately
+                  const newTitle =
+                    e.currentTarget.textContent?.trim() || "New page"
+                  if (newTitle !== currentPage.title) {
+                    onUpdatePage({ title: newTitle })
+                  }
+
+                  // Blur title to remove focus
                   titleRef.current?.blur()
-                  setTimeout(() => {
-                    actions.createBlock(undefined, "paragraph")
-                  }, 100)
+
+                  // Create and focus new paragraph block instantly
+                  const newBlockId = await actions.createBlock(
+                    undefined,
+                    "paragraph"
+                  )
+                  if (newBlockId) {
+                    // Focus is automatically handled by the focusedBlockId state in createBlock
+                    // The BlockRenderer will auto-focus when isFocused becomes true
+                  }
                 }
               }}
               onInput={e => {
@@ -1046,8 +1061,8 @@ export default function WritiEditor({
             </h1>
           </div>
 
-          {/* Content Area with proper spacing */}
-          <div className="mt-8">
+          {/* Content Area with proper spacing and alignment */}
+          <div className="mt-4 pl-8">
             {/* Blocks Content */}
             <DraggableBlockList
               blocks={currentBlocks}
