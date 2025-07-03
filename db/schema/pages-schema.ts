@@ -9,7 +9,7 @@ import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 export const pagesTable = pgTable("pages", {
   id: uuid("id").defaultRandom().primaryKey(),
   userId: text("user_id").notNull(),
-  title: text("title").notNull().default("Untitled"),
+  title: text("title").notNull().default("New Page"),
   emoji: text("emoji"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")

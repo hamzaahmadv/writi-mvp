@@ -64,13 +64,13 @@ export default function DashboardPage() {
       {
         id: "todo",
         title: "To-do List / Planner",
-        emoji: "📋",
+        emoji: "",
         isBuiltIn: true
       },
       {
         id: "getting-started",
         title: "Getting Started",
-        emoji: "🚀",
+        emoji: "",
         isBuiltIn: true
       }
     ]
@@ -101,7 +101,7 @@ export default function DashboardPage() {
       const newEssential: EssentialPage = {
         id: `essential-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         title: title || "New Essential",
-        emoji: emoji || "⭐",
+        emoji: emoji || "",
         isBuiltIn: false
       }
 
@@ -210,7 +210,7 @@ export default function DashboardPage() {
       return {
         id: "loading-page",
         title: "Welcome to Writi",
-        emoji: "📝",
+        emoji: null,
         userId,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -244,7 +244,7 @@ export default function DashboardPage() {
     try {
       const duplicatedPage = await createPage(
         `${page.title} (Copy)`,
-        page.emoji || "📝"
+        page.emoji || undefined
       )
 
       if (duplicatedPage) {

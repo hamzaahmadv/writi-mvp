@@ -117,7 +117,7 @@ export async function getFavoritePagesAction(
         essentialPage = {
           id: 'essential-todo',
           title: 'To-do List / Planner',
-          emoji: '📋',
+          emoji: '',
           userId: userId,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -126,7 +126,7 @@ export async function getFavoritePagesAction(
         essentialPage = {
           id: 'essential-getting-started',
           title: 'Getting Started',
-          emoji: '🚀',
+          emoji: '',
           userId: userId,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -136,7 +136,7 @@ export async function getFavoritePagesAction(
         essentialPage = {
           id: favorite.pageId,
           title: 'Essential Page',
-          emoji: '⭐',
+          emoji: '',
           userId: userId,
           createdAt: new Date(),
           updatedAt: new Date()

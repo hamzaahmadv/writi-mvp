@@ -51,7 +51,7 @@ export function usePage(userId: string | null): UsePageResult {
             id: `temp-${Date.now()}`,
             userId,
             title: "Welcome to Writi",
-            emoji: "📝",
+            emoji: null,
             createdAt: new Date(),
             updatedAt: new Date()
           }
@@ -82,8 +82,7 @@ export function usePage(userId: string | null): UsePageResult {
     try {
       const result = await createPageAction({
         userId,
-        title: "Welcome to Writi",
-        emoji: "📝"
+        title: "Welcome to Writi"
       })
 
       if (result.isSuccess) {
@@ -109,8 +108,7 @@ export function usePage(userId: string | null): UsePageResult {
 
     const result = await createPageAction({
       userId,
-      title: "Welcome to Writi",
-      emoji: "📝"
+      title: "Welcome to Writi"
     })
 
     if (result.isSuccess) {
@@ -126,8 +124,8 @@ export function usePage(userId: string | null): UsePageResult {
 
   // Create a new page
   const createPage = async (
-    title = "Untitled",
-    emoji = "📝"
+    title = "New Page",
+    emoji?: string
   ): Promise<SelectPage | null> => {
     if (!userId) return null
 
@@ -135,7 +133,7 @@ export function usePage(userId: string | null): UsePageResult {
       const result = await createPageAction({
         userId,
         title,
-        emoji
+        ...(emoji && { emoji })
       })
 
       if (result.isSuccess) {
