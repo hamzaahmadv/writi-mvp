@@ -49,6 +49,16 @@ export default function PageIcon({
       }
     }
 
+    if (currentIcon.type === "image" && currentIcon.url) {
+      return (
+        <img
+          src={currentIcon.url}
+          alt="Page icon"
+          className="size-12 rounded-lg object-cover shadow-sm transition-transform group-hover:scale-110"
+        />
+      )
+    }
+
     return null
   }
 

@@ -4,7 +4,28 @@
 
 ---
 
-## 📆 January 16, 2025
+## 📆 July 3 , 2025
+
+### 🖼️ Image Upload Tab Implementation for Icon Picker
+**Agent**: Claude 4 Sonnet  
+**Task**: Built complete image upload system for custom page icons with Supabase Storage integration  
+**Location**: `actions/storage/page-icon-storage-actions.ts`, `lib/hooks/use-upload-icon.tsx`, `app/dashboard/_components/upload-icon-tab.tsx`, `lib/image-utils.ts`, `lib/supabase.ts`  
+**Details**:
+- **Supabase Storage Setup**: Created `icons` bucket with RLS policies optimized for Clerk authentication
+- **Server Actions**: `uploadPageIconStorage` with FormData handling, 5MB limit, file validation (PNG/JPG/WebP)
+- **Image Compression**: Smart auto-compression for files >500KB using Canvas API to prevent upload timeouts
+- **Upload Hook**: `useUploadIcon` with progress tracking, error handling, and 15-second timeout protection
+- **Upload Component**: Notion-style drag & drop interface with clipboard paste support (⌘+V)
+- **File Organization**: Secure naming pattern `${userId}/page-icons/${timestamp}-${randomId}.${ext}`
+- **UI Features**: Square preview thumbnails (20x20), loading states, error alerts, cancel/save buttons
+- **Integration**: Updated `PageIcon` and `IconPicker` components, added Supabase domains to `next.config.mjs`
+- **Debugging**: Resolved RLS policy conflicts, upload hanging issues, and large file timeout problems
+- **Environment**: Added Supabase URL/keys configuration with validation and connection testing
+- **Type System**: Extended `PageIcon` union type to support `{ type: 'image', url: string }` format
+
+---
+
+## 📆 July 3, 2025
 
 ### 🎯 Icons Tab Implementation for Page Header
 **Agent**: Claude 4 Sonnet  
