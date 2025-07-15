@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useComments } from "@/lib/hooks/use-comments"
 import { CommentDisplay } from "./comment-display"
 import { HorizontalCommentInput } from "./horizontal-comment-input"
@@ -31,37 +31,52 @@ export function CommentsSection({
   } = useComments(pageId, blockId)
 
   const hasComments = comments.length > 0
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Always show if there are existing comments (Notion-like behavior)
   // Only hide if no comments AND not explicitly visible
   const shouldShow = hasComments || isVisible
+
+  // Auto-scroll to bottom when new comments are added
+  useEffect(() => {
+    if (scrollContainerRef.current && comments.length > 0) {
+      scrollContainerRef.current.scrollTop =
+        scrollContainerRef.current.scrollHeight
+    }
+  }, [comments.length])
 
   if (!shouldShow) return null
 
   return (
     <div
       className={cn(
-        "space-y-3 transition-all duration-300 ease-in-out",
+        "flex flex-col transition-all duration-300 ease-in-out",
+        hasComments ? "gap-3" : "",
         className
       )}
     >
-      {/* Existing Comments */}
+      {/* Thread View Container */}
       {hasComments && (
-        <div className="animate-in fade-in-50 space-y-2 duration-300">
-          {comments.map((comment, index) => (
-            <div
-              key={comment.id}
-              className="animate-in slide-in-from-top-2 duration-300"
-              style={{ animationDelay: `${index * 50}ms` }}
-            >
-              <CommentDisplay
-                comment={comment}
-                onUpdate={updateComment}
-                onDelete={deleteComment}
-                onToggleResolved={toggleResolved}
-              />
-            </div>
-          ))}
+        <div
+          ref={scrollContainerRef}
+          className="animate-in fade-in-50 max-h-[300px] overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/50 p-3 duration-300"
+        >
+          <div className="space-y-2">
+            {comments.map((comment, index) => (
+              <div
+                key={comment.id}
+                className="animate-in slide-in-from-top-2 duration-300"
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <CommentDisplay
+                  comment={comment}
+                  onUpdate={updateComment}
+                  onDelete={deleteComment}
+                  onToggleResolved={toggleResolved}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

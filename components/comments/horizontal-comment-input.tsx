@@ -25,7 +25,7 @@ export function HorizontalCommentInput({
   const [isExpanded, setIsExpanded] = useState(false)
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { user } = useCurrentUser()
   const { comments, createComment } = useComments(pageId, blockId)
 
@@ -35,11 +35,24 @@ export function HorizontalCommentInput({
 
   // Auto-focus when component becomes visible
   useEffect(() => {
-    if (isVisible && inputRef.current) {
-      inputRef.current.focus()
+    if (isVisible && textareaRef.current) {
+      textareaRef.current.focus()
       setIsExpanded(true)
     }
   }, [isVisible])
+
+  // Auto-resize textarea as user types
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (!textarea) return
+
+    const adjustHeight = () => {
+      textarea.style.height = "auto"
+      textarea.style.height = `${textarea.scrollHeight}px`
+    }
+
+    adjustHeight()
+  }, [comment])
 
   const handleFocus = () => {
     setIsExpanded(true)
@@ -59,20 +72,16 @@ export function HorizontalCommentInput({
       const newComment = await createComment(comment.trim(), blockId)
       setComment("")
 
-      // If there are existing comments, keep the input expanded like Notion
-      // If this is the first comment, collapse the input
-      const shouldKeepExpanded = hasComments || !!newComment
-      setIsExpanded(shouldKeepExpanded)
+      // Always keep the input expanded and focused after submission
+      setIsExpanded(true)
 
-      if (!shouldKeepExpanded) {
-        inputRef.current?.blur()
-      }
+      // Keep focus on the textarea for continuous commenting
+      setTimeout(() => {
+        textareaRef.current?.focus()
+      }, 0)
 
-      // Only close if onClose is provided AND there were no existing comments before
-      // AND the comment creation failed (newComment is null)
-      if (onClose && !hasComments && !newComment) {
-        onClose()
-      }
+      // Never close the comment input after submission
+      // This allows users to add multiple comments quickly
     } catch (error) {
       console.error("Failed to submit comment:", error)
     } finally {
@@ -83,7 +92,7 @@ export function HorizontalCommentInput({
   const handleCancel = () => {
     setComment("")
     setIsExpanded(false)
-    inputRef.current?.blur()
+    textareaRef.current?.blur()
     // Only close if there are no existing comments
     if (onClose && !hasComments) {
       onClose()
@@ -91,7 +100,8 @@ export function HorizontalCommentInput({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      // Submit on Enter key (without Shift)
       e.preventDefault()
       handleSubmit()
     } else if (e.key === "Escape") {
@@ -130,22 +140,22 @@ export function HorizontalCommentInput({
           )}
         </div>
 
-        {/* Input Field */}
+        {/* Textarea Field */}
         <div className="min-w-0 flex-1">
-          <input
-            ref={inputRef}
-            type="text"
+          <textarea
+            ref={textareaRef}
             value={comment}
             onChange={e => setComment(e.target.value)}
             onFocus={handleFocus}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
             placeholder="Add a comment..."
+            rows={1}
             className={cn(
-              "w-full border-none bg-transparent text-sm outline-none transition-all duration-200 placeholder:text-gray-400",
-              isExpanded ? "text-gray-900" : "text-gray-600",
-              "focus:placeholder:text-gray-300"
+              "max-h-[120px] min-h-[20px] w-full resize-none overflow-y-auto border-none bg-transparent text-sm outline-none transition-all duration-200 placeholder:text-gray-400 focus:placeholder:text-gray-300",
+              isExpanded ? "text-gray-900" : "text-gray-600"
             )}
+            style={{ lineHeight: "20px" }}
             disabled={isSubmitting}
           />
         </div>

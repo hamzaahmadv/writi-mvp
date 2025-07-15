@@ -82,6 +82,13 @@ export function useComments(
       // Optimistic update
       setComments(prev => [...prev, tempComment])
 
+      // Notify other components about the new comment
+      window.dispatchEvent(
+        new CustomEvent("commentsChanged", {
+          detail: { pageId, blockId: targetBlockId || blockId }
+        })
+      )
+
       try {
         const result = await createCommentAction({
           userId,
@@ -98,6 +105,14 @@ export function useComments(
               comment.id === tempComment.id ? result.data : comment
             )
           )
+
+          // Notify other components about the successful creation
+          window.dispatchEvent(
+            new CustomEvent("commentsChanged", {
+              detail: { pageId, blockId: targetBlockId || blockId }
+            })
+          )
+
           return result.data
         } else {
           // Rollback optimistic update
@@ -145,6 +160,13 @@ export function useComments(
           setComments(prev =>
             prev.map(comment => (comment.id === id ? result.data : comment))
           )
+
+          // Notify other components
+          window.dispatchEvent(
+            new CustomEvent("commentsChanged", {
+              detail: { pageId, blockId }
+            })
+          )
         } else {
           // Rollback
           setComments(previousComments)
@@ -180,6 +202,13 @@ export function useComments(
         setComments(prev =>
           prev.map(comment => (comment.id === id ? result.data : comment))
         )
+
+        // Notify other components
+        window.dispatchEvent(
+          new CustomEvent("commentsChanged", {
+            detail: { pageId, blockId }
+          })
+        )
       } else {
         // Rollback
         setComments(previousComments)
@@ -203,7 +232,14 @@ export function useComments(
     try {
       const result = await deleteCommentAction(id, userId)
 
-      if (!result.isSuccess) {
+      if (result.isSuccess) {
+        // Notify other components
+        window.dispatchEvent(
+          new CustomEvent("commentsChanged", {
+            detail: { pageId, blockId }
+          })
+        )
+      } else {
         // Rollback
         setComments(previousComments)
         setError(result.message)
@@ -224,6 +260,24 @@ export function useComments(
   useEffect(() => {
     loadComments()
   }, [pageId, blockId])
+
+  // Listen for comment changes from other components
+  useEffect(() => {
+    const handleCommentsChanged = (event: Event) => {
+      const customEvent = event as CustomEvent
+      // Only refresh if the event is for the same page/block
+      if (
+        customEvent.detail?.pageId === pageId &&
+        (!blockId || customEvent.detail?.blockId === blockId)
+      ) {
+        refreshComments()
+      }
+    }
+
+    window.addEventListener("commentsChanged", handleCommentsChanged)
+    return () =>
+      window.removeEventListener("commentsChanged", handleCommentsChanged)
+  }, [pageId, blockId, refreshComments])
 
   return {
     comments,
