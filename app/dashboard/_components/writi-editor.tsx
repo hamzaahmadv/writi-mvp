@@ -34,6 +34,7 @@ import {
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { useBlocks } from "@/lib/hooks/use-blocks"
 import { useFavorites } from "@/lib/hooks/use-favorites"
+import { useBlockBatch } from "@/lib/hooks/use-block-batch"
 import { SelectPage } from "@/db/schema"
 
 interface WritiEditorProps {
@@ -56,6 +57,19 @@ export default function WritiEditor({
 
   // Favorites management
   const { toggleFavorite, isFavorited } = useFavorites(userId)
+
+  // Block batching for better performance
+  const { batchUpdate: batchUpdateBlock, flushBatch: flushBlockBatch } =
+    useBlockBatch(
+      async (blockId: string, updates: Partial<Block>) => {
+        if (isEssential) {
+          await updateEssentialBlock(blockId, updates)
+        } else {
+          await updateBlockInDb(blockId, updates)
+        }
+      },
+      150 // Batch timeout in milliseconds
+    )
 
   // Blocks management - use database for regular pages, localStorage for essentials
   const {
@@ -153,7 +167,10 @@ export default function WritiEditor({
     }))
   }, [currentBlocks])
 
-  // Auto-focus title for new pages and check if title is empty
+  // Track user interactions to prevent unwanted auto-focus
+  const [userInteracted, setUserInteracted] = useState(false)
+
+  // Check if title is empty without auto-focusing
   useEffect(() => {
     if (currentPage) {
       const isEmpty =
@@ -161,23 +178,65 @@ export default function WritiEditor({
         currentPage.title === "Untitled" ||
         !currentPage.title.trim()
       setTitleIsEmpty(isEmpty)
-
-      // Auto-focus title for new pages
-      if (isEmpty && titleRef.current && !titleIsFocused) {
-        setTimeout(() => {
-          titleRef.current?.focus()
-          // Select all text
-          const range = document.createRange()
-          const selection = window.getSelection()
-          if (titleRef.current && selection) {
-            range.selectNodeContents(titleRef.current)
-            selection.removeAllRanges()
-            selection.addRange(range)
-          }
-        }, 100)
-      }
     }
-  }, [currentPage?.id, currentPage?.title, titleIsFocused])
+  }, [currentPage?.id, currentPage?.title])
+
+  // Reset user interaction flag when page changes
+  useEffect(() => {
+    setUserInteracted(false)
+  }, [currentPage?.id])
+
+  // Flush batch updates on page change or unmount
+  useEffect(() => {
+    return () => {
+      flushBlockBatch()
+    }
+  }, [currentPage?.id, flushBlockBatch])
+
+  // Memory optimization: Clean up localStorage periodically
+  useEffect(() => {
+    const cleanupInterval = setInterval(
+      () => {
+        try {
+          // Clean up old welcome content flags (older than 7 days)
+          const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
+          const keysToRemove: string[] = []
+
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key?.startsWith("writi-welcome-created-")) {
+              const item = localStorage.getItem(key)
+              if (item === "true") {
+                // Check if this is an old entry (approximate check)
+                const timestamp = key.split("-").pop()
+                if (
+                  timestamp &&
+                  timestamp.length > 10 &&
+                  parseInt(timestamp) < weekAgo
+                ) {
+                  keysToRemove.push(key)
+                }
+              }
+            }
+          }
+
+          keysToRemove.forEach(key => localStorage.removeItem(key))
+
+          // Log cleanup if items were removed
+          if (keysToRemove.length > 0) {
+            console.log(
+              `Cleaned up ${keysToRemove.length} old localStorage entries`
+            )
+          }
+        } catch (error) {
+          console.warn("Failed to clean up localStorage:", error)
+        }
+      },
+      5 * 60 * 1000
+    ) // Run every 5 minutes
+
+    return () => clearInterval(cleanupInterval)
+  }, [])
 
   // Check if welcome content has been created for this page (using localStorage for persistence)
   const getWelcomeContentKey = (pageId: string, isEssential: boolean) => {
@@ -222,7 +281,7 @@ export default function WritiEditor({
     ): Promise<string | null> => {
       if (!currentPage?.id) return null
 
-      const newBlockId = `essential-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      const newBlockId = `essential-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
       const newBlock: Block = {
         id: newBlockId,
         type,
@@ -472,7 +531,11 @@ export default function WritiEditor({
   // Editor actions with database integration
   const actions: EditorActions = {
     createBlock: useCallback(
-      async (afterId?: string, type: BlockType = "paragraph") => {
+      async (
+        afterId?: string,
+        type: BlockType = "paragraph",
+        autoFocus = false
+      ) => {
         if (!userId || !currentPage) return null
 
         try {
@@ -480,7 +543,7 @@ export default function WritiEditor({
             ? await createEssentialBlock(afterId, type)
             : await createBlockInDb(afterId, type)
 
-          if (newBlockId) {
+          if (newBlockId && autoFocus) {
             setEditorState(prev => ({
               ...prev,
               focusedBlockId: newBlockId
@@ -498,16 +561,13 @@ export default function WritiEditor({
     updateBlock: useCallback(
       async (id: string, updates: Partial<Block>) => {
         try {
-          if (isEssential) {
-            await updateEssentialBlock(id, updates)
-          } else {
-            await updateBlockInDb(id, updates)
-          }
+          // Use batching for better performance
+          batchUpdateBlock(id, updates)
         } catch (error) {
           console.error("Failed to update block:", error)
         }
       },
-      [isEssential, updateEssentialBlock, updateBlockInDb]
+      [batchUpdateBlock]
     ),
 
     deleteBlock: useCallback(
@@ -637,16 +697,61 @@ export default function WritiEditor({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [editorState.showSlashMenu, actions])
 
-  // Skip loading for preloaded pages, minimal loading for others
+  // Skip loading for preloaded pages, show skeleton for others
   if (
     !userLoaded ||
     (!isPreloaded && currentBlocksLoading && currentBlocks.length === 0)
   ) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="flex items-center space-x-2">
-          <Loader2 className="size-4 animate-spin" />
-          <span>Loading...</span>
+      <div className="flex h-screen flex-col overflow-hidden">
+        {/* Header Skeleton */}
+        <div
+          className="flex items-center justify-between border-b bg-white px-6 py-3"
+          style={{
+            borderColor: "var(--color-border-light)",
+            minHeight: "60px"
+          }}
+        >
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-1">
+              <div className="size-8 animate-pulse rounded-md bg-gray-200" />
+              <div className="size-8 animate-pulse rounded-md bg-gray-200" />
+            </div>
+            <div className="h-6 w-px bg-gray-300" />
+            <div className="flex items-center space-x-3">
+              <div className="size-8 animate-pulse rounded-md bg-gray-200" />
+              <div className="h-4 w-32 animate-pulse rounded bg-gray-200" />
+            </div>
+          </div>
+          <div className="flex items-center space-x-1">
+            <div className="h-4 w-16 animate-pulse rounded bg-gray-200" />
+            <div className="h-8 w-16 animate-pulse rounded bg-gray-200" />
+            <div className="size-8 animate-pulse rounded-md bg-gray-200" />
+            <div className="size-8 animate-pulse rounded-md bg-gray-200" />
+            <div className="size-8 animate-pulse rounded-md bg-gray-200" />
+          </div>
+        </div>
+
+        {/* Content Skeleton */}
+        <div className="flex-1 overflow-auto bg-white">
+          <div className="mx-auto max-w-3xl px-6 py-8">
+            <div className="mt-8 flex flex-col pl-8">
+              {/* Title Skeleton */}
+              <div className="space-y-3">
+                <div className="h-12 w-96 animate-pulse rounded bg-gray-200" />
+              </div>
+            </div>
+
+            {/* Blocks Skeleton */}
+            <div className="mt-4 space-y-3 pl-8">
+              <div className="h-6 w-full animate-pulse rounded bg-gray-200" />
+              <div className="h-6 w-4/5 animate-pulse rounded bg-gray-200" />
+              <div className="h-6 w-3/4 animate-pulse rounded bg-gray-200" />
+              <div className="h-4 w-0 animate-pulse rounded bg-gray-200" />
+              <div className="h-6 w-full animate-pulse rounded bg-gray-200" />
+              <div className="h-6 w-2/3 animate-pulse rounded bg-gray-200" />
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -952,6 +1057,7 @@ export default function WritiEditor({
                   suppressContentEditableWarning={true}
                   onFocus={() => {
                     setTitleIsFocused(true)
+                    setUserInteracted(true)
                     // If the title is placeholder text, select all for easy replacement
                     if (titleIsEmpty) {
                       setTimeout(() => {
@@ -993,14 +1099,11 @@ export default function WritiEditor({
                       titleRef.current?.blur()
 
                       // Create and focus new paragraph block instantly
-                      const newBlockId = await actions.createBlock(
+                      await actions.createBlock(
                         undefined,
-                        "paragraph"
+                        "paragraph",
+                        true // auto-focus on user interaction
                       )
-                      if (newBlockId) {
-                        // Focus is automatically handled by the focusedBlockId state in createBlock
-                        // The BlockRenderer will auto-focus when isFocused becomes true
-                      }
                     }
                   }}
                   onInput={e => {
@@ -1055,6 +1158,7 @@ export default function WritiEditor({
               actions={actions}
               editorState={editorState}
               onMoveBlock={handleMoveBlock}
+              userInteracted={userInteracted}
             />
 
             {/* Empty state */}
@@ -1078,13 +1182,15 @@ export default function WritiEditor({
             <div
               className="group cursor-text py-4"
               onClick={() => {
+                setUserInteracted(true)
                 if (currentBlocks.length > 0) {
                   actions.createBlock(
                     currentBlocks[currentBlocks.length - 1].id,
-                    "paragraph"
+                    "paragraph",
+                    true // auto-focus on user interaction
                   )
                 } else {
-                  actions.createBlock(undefined, "paragraph")
+                  actions.createBlock(undefined, "paragraph", true)
                 }
               }}
             >

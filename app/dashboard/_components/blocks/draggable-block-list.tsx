@@ -27,13 +27,15 @@ interface DraggableBlockListProps {
     hoverId: string,
     position: "before" | "after"
   ) => void
+  userInteracted?: boolean
 }
 
 export function DraggableBlockList({
   blocks,
   actions,
   editorState,
-  onMoveBlock
+  onMoveBlock,
+  userInteracted = false
 }: DraggableBlockListProps) {
   // Drag and drop sensors
   const sensors = useSensors(
@@ -108,6 +110,7 @@ export function DraggableBlockList({
                 isFocused={editorState.focusedBlockId === block.id}
                 isSelected={editorState.selectedBlockIds.includes(block.id)}
                 listNumber={listNumber}
+                userInteracted={userInteracted}
               />
             )
           })}

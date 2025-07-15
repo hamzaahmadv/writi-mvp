@@ -27,6 +27,7 @@ interface BlockRendererProps {
   isSelected: boolean
   level?: number
   listNumber?: number
+  userInteracted?: boolean
 }
 
 export function BlockRenderer({
@@ -35,7 +36,8 @@ export function BlockRenderer({
   isFocused,
   isSelected,
   level = 0,
-  listNumber
+  listNumber,
+  userInteracted = false
 }: BlockRendererProps) {
   const [isToggleExpanded, setIsToggleExpanded] = useState(true)
   const [isHovered, setIsHovered] = useState(false)
@@ -89,8 +91,12 @@ export function BlockRenderer({
         lastContentRef.current = block.content
       }
 
-      // Focus the element if this block is focused
-      if (isFocused && document.activeElement !== contentRef.current) {
+      // Focus the element if this block is focused AND user has interacted
+      if (
+        isFocused &&
+        userInteracted &&
+        document.activeElement !== contentRef.current
+      ) {
         // Use requestAnimationFrame to ensure DOM is fully updated
         requestAnimationFrame(() => {
           if (contentRef.current) {
@@ -111,12 +117,13 @@ export function BlockRenderer({
         })
       }
     }
-  }, [block.type, isFocused])
+  }, [block.type, isFocused, userInteracted])
 
-  // Auto-focus when block becomes focused
+  // Auto-focus when block becomes focused (only if user has interacted)
   useEffect(() => {
     if (
       isFocused &&
+      userInteracted &&
       contentRef.current &&
       document.activeElement !== contentRef.current
     ) {
@@ -134,7 +141,7 @@ export function BlockRenderer({
       selection?.removeAllRanges()
       selection?.addRange(range)
     }
-  }, [isFocused])
+  }, [isFocused, userInteracted])
 
   // Set initial content
   useEffect(() => {

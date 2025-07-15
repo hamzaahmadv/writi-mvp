@@ -60,7 +60,11 @@ export interface SlashCommand {
 }
 
 export interface EditorActions {
-  createBlock: (afterId?: string, type?: BlockType) => Promise<string | null>
+  createBlock: (
+    afterId?: string,
+    type?: BlockType,
+    autoFocus?: boolean
+  ) => Promise<string | null>
   updateBlock: (id: string, updates: Partial<Block>) => Promise<void>
   deleteBlock: (id: string) => Promise<void>
   moveBlock: (
