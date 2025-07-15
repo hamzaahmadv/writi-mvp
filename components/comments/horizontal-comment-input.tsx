@@ -13,6 +13,7 @@ interface HorizontalCommentInputProps {
   isVisible: boolean
   onClose?: () => void
   className?: string
+  userInteracted?: boolean
 }
 
 export function HorizontalCommentInput({
@@ -20,7 +21,8 @@ export function HorizontalCommentInput({
   blockId,
   isVisible,
   onClose,
-  className
+  className,
+  userInteracted = false
 }: HorizontalCommentInputProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [comment, setComment] = useState("")
@@ -31,13 +33,13 @@ export function HorizontalCommentInput({
 
   const hasComments = comments.length > 0
 
-  // Auto-focus when component becomes visible
+  // Auto-focus when component becomes visible (only if user interacted)
   useEffect(() => {
-    if (isVisible && textareaRef.current) {
+    if (isVisible && userInteracted && textareaRef.current) {
       textareaRef.current.focus()
       setIsExpanded(true)
     }
-  }, [isVisible])
+  }, [isVisible, userInteracted])
 
   // Auto-resize textarea as user types
   useEffect(() => {

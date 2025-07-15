@@ -154,6 +154,7 @@ export default function WritiEditor({
   const [titleIsFocused, setTitleIsFocused] = useState(false)
   const [titleIsEmpty, setTitleIsEmpty] = useState(false)
   const [showCommentInput, setShowCommentInput] = useState(false)
+  const [commentUserInteracted, setCommentUserInteracted] = useState(false)
   const titleRef = useRef<HTMLHeadingElement>(null)
 
   // Icon picker state
@@ -181,9 +182,11 @@ export default function WritiEditor({
     }
   }, [currentPage?.id, currentPage?.title])
 
-  // Reset user interaction flag when page changes
+  // Reset user interaction flags when page changes
   useEffect(() => {
     setUserInteracted(false)
+    setShowCommentInput(false)
+    setCommentUserInteracted(false)
   }, [currentPage?.id])
 
   // Flush batch updates on page change or unmount
@@ -947,7 +950,10 @@ export default function WritiEditor({
             size="sm"
             className="size-8 rounded-md p-0 transition-colors hover:bg-gray-100"
             title="Comments"
-            onClick={() => setShowCommentInput(!showCommentInput)}
+            onClick={() => {
+              setShowCommentInput(!showCommentInput)
+              setCommentUserInteracted(true)
+            }}
           >
             <MessageSquare className="size-4 text-gray-600" />
           </Button>
@@ -1043,7 +1049,10 @@ export default function WritiEditor({
                 // TODO: Implement cover image upload
                 console.log("Add cover")
               }}
-              onAddComment={() => setShowCommentInput(!showCommentInput)}
+              onAddComment={() => {
+                setShowCommentInput(!showCommentInput)
+                setCommentUserInteracted(true)
+              }}
             >
               <div className="space-y-3">
                 <h1
@@ -1145,6 +1154,7 @@ export default function WritiEditor({
                   isVisible={showCommentInput}
                   onClose={() => setShowCommentInput(false)}
                   className="max-w-2xl"
+                  userInteracted={commentUserInteracted}
                 />
               </div>
             </SafeFloatingHeader>

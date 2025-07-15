@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { SelectComment } from "@/db/schema"
 import {
   createCommentAction,
@@ -11,6 +11,7 @@ import {
   deleteCommentAction
 } from "@/actions/db/comments-actions"
 import { useCurrentUser } from "@/lib/hooks/use-user"
+import { useCommentsCache } from "@/lib/hooks/use-comments-cache"
 
 interface UseCommentsResult {
   comments: SelectComment[]
@@ -35,10 +36,20 @@ export function useComments(
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { userId } = useCurrentUser()
+  const { getCachedComments, setCachedComments, invalidateCache } =
+    useCommentsCache()
 
-  // Load comments for the page/block
+  // Load comments for the page/block with caching
   const loadComments = async () => {
     if (!pageId) return
+
+    // Check cache first
+    const cachedComments = getCachedComments(pageId, blockId)
+    if (cachedComments) {
+      setComments(cachedComments)
+      setIsLoading(false)
+      return
+    }
 
     setIsLoading(true)
     setError(null)
@@ -48,6 +59,7 @@ export function useComments(
 
       if (result.isSuccess) {
         setComments(result.data)
+        setCachedComments(pageId, blockId, result.data)
       } else {
         setError(result.message)
       }
@@ -106,6 +118,9 @@ export function useComments(
             )
           )
 
+          // Invalidate cache for this page/block
+          invalidateCache(pageId, targetBlockId || blockId)
+
           // Notify other components about the successful creation
           window.dispatchEvent(
             new CustomEvent("commentsChanged", {
@@ -160,6 +175,9 @@ export function useComments(
           setComments(prev =>
             prev.map(comment => (comment.id === id ? result.data : comment))
           )
+
+          // Invalidate cache
+          invalidateCache(pageId, blockId)
 
           // Notify other components
           window.dispatchEvent(
@@ -251,10 +269,19 @@ export function useComments(
     }
   }
 
-  // Refresh comments
-  const refreshComments = async (): Promise<void> => {
-    await loadComments()
-  }
+  // Refresh comments with debouncing
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const refreshComments = useCallback(async (): Promise<void> => {
+    // Clear any existing timeout
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current)
+    }
+
+    // Debounce the refresh call
+    refreshTimeoutRef.current = setTimeout(() => {
+      loadComments()
+    }, 300) // 300ms debounce
+  }, [loadComments])
 
   // Load comments on mount and when dependencies change
   useEffect(() => {
@@ -275,8 +302,14 @@ export function useComments(
     }
 
     window.addEventListener("commentsChanged", handleCommentsChanged)
-    return () =>
+
+    // Cleanup on unmount
+    return () => {
       window.removeEventListener("commentsChanged", handleCommentsChanged)
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current)
+      }
+    }
   }, [pageId, blockId, refreshComments])
 
   return {

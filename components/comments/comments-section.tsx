@@ -12,6 +12,7 @@ interface CommentsSectionProps {
   isVisible: boolean
   onClose?: () => void
   className?: string
+  userInteracted?: boolean
 }
 
 export function CommentsSection({
@@ -19,7 +20,8 @@ export function CommentsSection({
   blockId,
   isVisible,
   onClose,
-  className
+  className,
+  userInteracted = false
 }: CommentsSectionProps) {
   const {
     comments,
@@ -35,7 +37,7 @@ export function CommentsSection({
 
   // Always show if there are existing comments (Notion-like behavior)
   // Only hide if no comments AND not explicitly visible
-  const shouldShow = hasComments || isVisible
+  const shouldShow = hasComments || isVisible || isLoading
 
   // Auto-scroll to bottom when new comments are added
   useEffect(() => {
@@ -88,26 +90,46 @@ export function CommentsSection({
             blockId={blockId}
             isVisible={true}
             onClose={hasComments ? undefined : onClose} // Don't auto-close if there are existing comments
+            userInteracted={userInteracted}
           />
         </div>
       )}
 
-      {/* Loading State */}
+      {/* Loading State - Show skeleton while loading */}
       {isLoading && comments.length === 0 && (
         <div className="animate-in fade-in-50 space-y-3 duration-300">
-          {/* Loading Skeleton */}
-          {[...Array(2)].map((_, index) => (
-            <div key={index} className="flex gap-3 py-2">
-              <div className="size-8 animate-pulse rounded-full bg-gray-200"></div>
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-24 animate-pulse rounded bg-gray-200"></div>
-                  <div className="h-4 w-12 animate-pulse rounded bg-gray-200"></div>
+          {/* Comments Loading Skeleton */}
+          <div className="rounded-lg border border-gray-100 bg-gray-50/30 p-3">
+            <div className="space-y-3">
+              {[...Array(2)].map((_, index) => (
+                <div key={index} className="flex gap-3 py-2">
+                  <div className="size-8 animate-pulse rounded-full bg-gray-200"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-24 animate-pulse rounded bg-gray-200"></div>
+                      <div className="h-4 w-12 animate-pulse rounded bg-gray-200"></div>
+                    </div>
+                    <div className="h-4 w-full animate-pulse rounded bg-gray-200"></div>
+                    <div className="h-4 w-3/4 animate-pulse rounded bg-gray-200"></div>
+                  </div>
                 </div>
-                <div className="h-4 w-full animate-pulse rounded bg-gray-200"></div>
+              ))}
+            </div>
+          </div>
+
+          {/* Comment Input Loading Skeleton */}
+          <div className="animate-in fade-in-50 slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3">
+              <div className="size-8 animate-pulse rounded-full bg-gray-200"></div>
+              <div className="flex-1">
+                <div className="h-5 w-32 animate-pulse rounded bg-gray-200"></div>
+              </div>
+              <div className="flex gap-1">
+                <div className="size-7 animate-pulse rounded bg-gray-200"></div>
+                <div className="size-7 animate-pulse rounded bg-gray-200"></div>
               </div>
             </div>
-          ))}
+          </div>
         </div>
       )}
 
