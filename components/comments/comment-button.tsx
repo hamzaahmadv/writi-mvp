@@ -33,8 +33,6 @@ export function CommentButton({
   const [isOpen, setIsOpen] = useState(false)
   const { comments } = useComments(pageId, blockId)
 
-  // Calculate unresolved comments
-  const unresolvedCount = comments.filter(comment => !comment.resolved).length
   const hasComments = comments.length > 0
 
   // Show if explicitly visible OR if there are comments
@@ -71,17 +69,12 @@ export function CommentButton({
                   }
                 >
                   <MessageCircle className="size-4" />
-                  {unresolvedCount > 0 && (
-                    <span className="absolute -right-1 -top-1 flex size-3 items-center justify-center rounded-full bg-blue-600 text-[10px] font-medium text-white">
-                      {unresolvedCount > 9 ? "9+" : unresolvedCount}
-                    </span>
-                  )}
                 </button>
               </PopoverTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom">
               {hasComments
-                ? `${comments.length} comment${comments.length === 1 ? "" : "s"}${unresolvedCount > 0 ? ` (${unresolvedCount} unresolved)` : ""}`
+                ? `${comments.length} comment${comments.length === 1 ? "" : "s"}`
                 : "Add comment"}
             </TooltipContent>
           </Tooltip>

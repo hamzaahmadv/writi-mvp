@@ -29,8 +29,6 @@ export function HorizontalCommentInput({
   const { user } = useCurrentUser()
   const { comments, createComment } = useComments(pageId, blockId)
 
-  // Check if there are unresolved comments to show a badge
-  const unresolvedCount = comments.filter(c => !c.resolved).length
   const hasComments = comments.length > 0
 
   // Auto-focus when component becomes visible
@@ -133,11 +131,6 @@ export function HorizontalCommentInput({
           >
             <span>{user?.firstName?.[0] || "H"}</span>
           </div>
-          {unresolvedCount > 0 && !isExpanded && (
-            <div className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
-              {unresolvedCount > 9 ? "9+" : unresolvedCount}
-            </div>
-          )}
         </div>
 
         {/* Textarea Field */}
@@ -212,14 +205,6 @@ export function HorizontalCommentInput({
           )}
         </div>
       </div>
-
-      {/* Show comment count when there are comments */}
-      {hasComments && !isExpanded && (
-        <div className="ml-10 mt-1 text-xs text-gray-500">
-          {comments.length} comment{comments.length === 1 ? "" : "s"}
-          {unresolvedCount > 0 && ` · ${unresolvedCount} unresolved`}
-        </div>
-      )}
     </div>
   )
 }
