@@ -91,35 +91,12 @@ export function BlockRenderer({
         lastContentRef.current = block.content
       }
 
-      // Focus the element if this block is focused AND user has interacted
-      if (
-        isFocused &&
-        userInteracted &&
-        document.activeElement !== contentRef.current
-      ) {
-        // Use requestAnimationFrame to ensure DOM is fully updated
-        requestAnimationFrame(() => {
-          if (contentRef.current) {
-            contentRef.current.focus()
-            // Place cursor at end
-            const range = document.createRange()
-            const selection = window.getSelection()
-            if (contentRef.current.childNodes.length > 0) {
-              range.selectNodeContents(contentRef.current)
-              range.collapse(false)
-            } else {
-              range.setStart(contentRef.current, 0)
-              range.setEnd(contentRef.current, 0)
-            }
-            selection?.removeAllRanges()
-            selection?.addRange(range)
-          }
-        })
-      }
+      // Sync content with block data
+      // Focus logic is handled in the dedicated useEffect below
     }
   }, [block.type, isFocused, userInteracted])
 
-  // Auto-focus when block becomes focused (only if user has interacted)
+  // Instant auto-focus when block becomes focused (only if user has interacted)
   useEffect(() => {
     if (
       isFocused &&
@@ -127,8 +104,9 @@ export function BlockRenderer({
       contentRef.current &&
       document.activeElement !== contentRef.current
     ) {
+      // Instant focus for immediate cursor appearance
       contentRef.current.focus()
-      // Place cursor at end
+      // Place cursor at end for smooth typing continuation
       const range = document.createRange()
       const selection = window.getSelection()
       if (contentRef.current.childNodes.length > 0) {
@@ -143,7 +121,7 @@ export function BlockRenderer({
     }
   }, [isFocused, userInteracted])
 
-  // Set initial content
+  // Set initial content and handle instant focus for new blocks
   useEffect(() => {
     if (
       contentRef.current &&
@@ -152,7 +130,24 @@ export function BlockRenderer({
       contentRef.current.textContent = block.content
       lastContentRef.current = block.content
     }
-  }, [])
+
+    // Instant focus for new empty blocks created via Enter key
+    if (
+      isFocused &&
+      userInteracted &&
+      contentRef.current &&
+      !block.content &&
+      block.id.startsWith("temp_")
+    ) {
+      contentRef.current.focus()
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.setStart(contentRef.current, 0)
+      range.setEnd(contentRef.current, 0)
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+    }
+  }, [block.id, isFocused, userInteracted])
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -162,43 +157,6 @@ export function BlockRenderer({
       }
     }
   }, [])
-
-  const getCurrentCursorPosition = (): number | null => {
-    if (!contentRef.current) return null
-    const selection = window.getSelection()
-    if (!selection || selection.rangeCount === 0) return null
-
-    const range = selection.getRangeAt(0)
-    return range.startOffset
-  }
-
-  const setCursorPosition = (position: number) => {
-    if (!contentRef.current) return
-
-    const range = document.createRange()
-    const selection = window.getSelection()
-
-    try {
-      if (contentRef.current.childNodes.length > 0) {
-        const textNode = contentRef.current.childNodes[0]
-        const maxPos = textNode.textContent?.length || 0
-        range.setStart(textNode, Math.min(position, maxPos))
-        range.setEnd(textNode, Math.min(position, maxPos))
-      } else {
-        range.setStart(contentRef.current, 0)
-        range.setEnd(contentRef.current, 0)
-      }
-
-      selection?.removeAllRanges()
-      selection?.addRange(range)
-    } catch (error) {
-      // Fallback: place cursor at end
-      range.selectNodeContents(contentRef.current)
-      range.collapse(false)
-      selection?.removeAllRanges()
-      selection?.addRange(range)
-    }
-  }
 
   // Helper function to determine if placeholder should be shown
   const shouldShowPlaceholder = () => {
@@ -229,7 +187,7 @@ export function BlockRenderer({
       const nextType = block.type.startsWith("heading")
         ? "paragraph"
         : block.type
-      actions.createBlock(block.id, nextType as BlockType)
+      actions.createBlock(block.id, nextType as BlockType, true) // Enable autoFocus for smooth cursor movement
     }
 
     // Backspace on empty block - delete block (only if cursor is at start AND block is empty)
@@ -661,11 +619,11 @@ export function BlockRenderer({
   return (
     <motion.div
       ref={setNodeRef}
-      initial={{ opacity: 0, y: 2 }}
+      initial={{ opacity: 0, y: 1 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15 }}
+      transition={{ duration: 0, ease: "easeOut" }}
       className={`
-        group relative py-1 transition-all duration-150
+        group relative py-1 transition-all duration-75
         ${isFocused ? "bg-blue-50/30" : ""}
         ${isSelected ? "bg-blue-50" : "hover:bg-gray-50/30"}
         ${isDragging ? "z-50" : ""}

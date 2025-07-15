@@ -547,6 +547,8 @@ export default function WritiEditor({
             : await createBlockInDb(afterId, type)
 
           if (newBlockId && autoFocus) {
+            // Immediate synchronous state updates for instant focus
+            setUserInteracted(true)
             setEditorState(prev => ({
               ...prev,
               focusedBlockId: newBlockId
