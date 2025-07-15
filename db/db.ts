@@ -8,7 +8,8 @@ import {
   profilesTable,
   blocksTable,
   pagesTable,
-  favoritesTable
+  favoritesTable,
+  commentsTable
 } from "@/db/schema"
 import { config } from "dotenv"
 import { drizzle } from "drizzle-orm/postgres-js"
@@ -20,7 +21,8 @@ const schema = {
   profiles: profilesTable,
   blocks: blocksTable,
   pages: pagesTable,
-  favorites: favoritesTable
+  favorites: favoritesTable,
+  comments: commentsTable
 }
 
 const client = postgres(process.env.DATABASE_URL!)

@@ -24,6 +24,7 @@ import { DraggableBlockList } from "./blocks/draggable-block-list"
 import { SlashCommandMenu } from "./blocks/slash-command-menu"
 import PageIcon from "./page-icon"
 import IconPicker from "./icon-picker"
+import { CommentsSection } from "@/components/comments/comments-section"
 import {
   Block,
   BlockType,
@@ -140,6 +141,8 @@ export default function WritiEditor({
   // Title editing state
   const [titleIsFocused, setTitleIsFocused] = useState(false)
   const [titleIsEmpty, setTitleIsEmpty] = useState(false)
+  const [titleAreaHovered, setTitleAreaHovered] = useState(false)
+  const [showCommentInput, setShowCommentInput] = useState(false)
   const titleRef = useRef<HTMLHeadingElement>(null)
 
   // Icon picker state
@@ -842,6 +845,7 @@ export default function WritiEditor({
             size="sm"
             className="size-8 rounded-md p-0 transition-colors hover:bg-gray-100"
             title="Comments"
+            onClick={() => setShowCommentInput(!showCommentInput)}
           >
             <MessageSquare className="size-4 text-gray-600" />
           </Button>
@@ -957,8 +961,7 @@ export default function WritiEditor({
               <button
                 className="inline-flex cursor-pointer items-center gap-1 text-sm text-gray-500 transition hover:text-black"
                 onClick={() => {
-                  // TODO: Implement comments system
-                  console.log("Add comment")
+                  setShowCommentInput(!showCommentInput)
                 }}
               >
                 <MessageSquare className="size-4" />
@@ -967,98 +970,112 @@ export default function WritiEditor({
             </div>
 
             {/* Page Title */}
-            <h1
-              ref={titleRef}
-              className={`mt-2 text-4xl font-bold outline-none transition-colors ${
-                titleIsEmpty && !titleIsFocused
-                  ? "text-gray-400"
-                  : "text-gray-900"
-              }`}
-              contentEditable
-              suppressContentEditableWarning={true}
-              onFocus={() => {
-                setTitleIsFocused(true)
-                // If the title is placeholder text, select all for easy replacement
-                if (titleIsEmpty) {
-                  setTimeout(() => {
-                    const range = document.createRange()
-                    const selection = window.getSelection()
-                    if (titleRef.current && selection) {
-                      range.selectNodeContents(titleRef.current)
-                      selection.removeAllRanges()
-                      selection.addRange(range)
-                    }
-                  }, 0)
-                }
-              }}
-              onBlur={e => {
-                setTitleIsFocused(false)
-                const newTitle =
-                  e.currentTarget.textContent?.trim() || "New Page"
-                setTitleIsEmpty(
-                  newTitle === "New Page" ||
-                    newTitle === "Untitled" ||
-                    !newTitle.trim()
-                )
-                if (newTitle !== currentPage.title) {
-                  onUpdatePage({ title: newTitle })
-                }
-              }}
-              onKeyDown={async e => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-
-                  // Save title immediately
+            <div
+              className="space-y-3"
+              onMouseEnter={() => setTitleAreaHovered(true)}
+              onMouseLeave={() => setTitleAreaHovered(false)}
+            >
+              <h1
+                ref={titleRef}
+                className={`text-4xl font-bold outline-none transition-colors ${
+                  titleIsEmpty && !titleIsFocused
+                    ? "text-gray-400"
+                    : "text-gray-900"
+                }`}
+                contentEditable
+                suppressContentEditableWarning={true}
+                onFocus={() => {
+                  setTitleIsFocused(true)
+                  // If the title is placeholder text, select all for easy replacement
+                  if (titleIsEmpty) {
+                    setTimeout(() => {
+                      const range = document.createRange()
+                      const selection = window.getSelection()
+                      if (titleRef.current && selection) {
+                        range.selectNodeContents(titleRef.current)
+                        selection.removeAllRanges()
+                        selection.addRange(range)
+                      }
+                    }, 0)
+                  }
+                }}
+                onBlur={e => {
+                  setTitleIsFocused(false)
                   const newTitle =
-                    e.currentTarget.textContent?.trim() || "New page"
+                    e.currentTarget.textContent?.trim() || "New Page"
+                  setTitleIsEmpty(
+                    newTitle === "New Page" ||
+                      newTitle === "Untitled" ||
+                      !newTitle.trim()
+                  )
                   if (newTitle !== currentPage.title) {
                     onUpdatePage({ title: newTitle })
                   }
+                }}
+                onKeyDown={async e => {
+                  if (e.key === "Enter") {
+                    e.preventDefault()
 
-                  // Blur title to remove focus
-                  titleRef.current?.blur()
+                    // Save title immediately
+                    const newTitle =
+                      e.currentTarget.textContent?.trim() || "New page"
+                    if (newTitle !== currentPage.title) {
+                      onUpdatePage({ title: newTitle })
+                    }
 
-                  // Create and focus new paragraph block instantly
-                  const newBlockId = await actions.createBlock(
-                    undefined,
-                    "paragraph"
+                    // Blur title to remove focus
+                    titleRef.current?.blur()
+
+                    // Create and focus new paragraph block instantly
+                    const newBlockId = await actions.createBlock(
+                      undefined,
+                      "paragraph"
+                    )
+                    if (newBlockId) {
+                      // Focus is automatically handled by the focusedBlockId state in createBlock
+                      // The BlockRenderer will auto-focus when isFocused becomes true
+                    }
+                  }
+                }}
+                onInput={e => {
+                  const content = e.currentTarget.textContent?.trim() || ""
+                  setTitleIsEmpty(
+                    !content || content === "New Page" || content === "Untitled"
                   )
-                  if (newBlockId) {
-                    // Focus is automatically handled by the focusedBlockId state in createBlock
-                    // The BlockRenderer will auto-focus when isFocused becomes true
+                }}
+                onPaste={e => {
+                  e.preventDefault()
+                  const plainText = e.clipboardData.getData("text/plain")
+                  if (plainText) {
+                    const selection = window.getSelection()
+                    if (selection && selection.rangeCount > 0) {
+                      const range = selection.getRangeAt(0)
+                      range.deleteContents()
+                      const textNode = document.createTextNode(plainText)
+                      range.insertNode(textNode)
+                      range.setStartAfter(textNode)
+                      range.setEndAfter(textNode)
+                      selection.removeAllRanges()
+                      selection.addRange(range)
+                    }
                   }
-                }
-              }}
-              onInput={e => {
-                const content = e.currentTarget.textContent?.trim() || ""
-                setTitleIsEmpty(
-                  !content || content === "New Page" || content === "Untitled"
-                )
-              }}
-              onPaste={e => {
-                e.preventDefault()
-                const plainText = e.clipboardData.getData("text/plain")
-                if (plainText) {
-                  const selection = window.getSelection()
-                  if (selection && selection.rangeCount > 0) {
-                    const range = selection.getRangeAt(0)
-                    range.deleteContents()
-                    const textNode = document.createTextNode(plainText)
-                    range.insertNode(textNode)
-                    range.setStartAfter(textNode)
-                    range.setEndAfter(textNode)
-                    selection.removeAllRanges()
-                    selection.addRange(range)
-                  }
-                }
-              }}
-              style={{
-                fontFamily: "var(--font-body)",
-                lineHeight: "1.2"
-              }}
-            >
-              {currentPage.title || "New page"}
-            </h1>
+                }}
+                style={{
+                  fontFamily: "var(--font-body)",
+                  lineHeight: "1.2"
+                }}
+              >
+                {currentPage.title || "New page"}
+              </h1>
+
+              {/* Comments Section */}
+              <CommentsSection
+                pageId={currentPage.id}
+                isVisible={showCommentInput}
+                onClose={() => setShowCommentInput(false)}
+                className="max-w-2xl"
+              />
+            </div>
           </div>
 
           {/* Content Area with proper spacing and alignment */}
