@@ -9,7 +9,6 @@ import {
   Check,
   MoreHorizontal,
   X,
-  Reply,
   Trash2,
   Edit2,
   MessageCircle
@@ -32,7 +31,6 @@ interface CommentItemProps {
   comment: SelectComment
   onUpdate: (id: string, content: string) => void
   onDelete: (id: string) => void
-  onToggleResolved: (id: string) => void
   currentUserId: string | null
 }
 
@@ -53,7 +51,6 @@ function CommentItem({
   comment,
   onUpdate,
   onDelete,
-  onToggleResolved,
   currentUserId
 }: CommentItemProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -169,34 +166,13 @@ function CommentItem({
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-44 bg-white">
               <DropdownMenuItem
                 onClick={() => setIsEditing(true)}
                 className="text-sm"
               >
                 <Edit2 className="mr-2 size-4" />
                 Edit comment
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onToggleResolved(comment.id)}
-                className={cn(
-                  "text-sm",
-                  comment.resolved
-                    ? "text-orange-600 focus:text-orange-700"
-                    : "text-green-600 focus:text-green-700"
-                )}
-              >
-                {comment.resolved ? (
-                  <>
-                    <Reply className="mr-2 size-4" />
-                    Reopen comment
-                  </>
-                ) : (
-                  <>
-                    <Check className="mr-2 size-4" />
-                    Resolve comment
-                  </>
-                )}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => onDelete(comment.id)}
@@ -226,7 +202,6 @@ export function CommentThread({
     error,
     createComment,
     updateComment,
-    toggleResolved,
     deleteComment
   } = useComments(pageId, blockId)
 
@@ -311,7 +286,6 @@ export function CommentThread({
                 comment={comment}
                 onUpdate={updateComment}
                 onDelete={deleteComment}
-                onToggleResolved={toggleResolved}
                 currentUserId={userId}
               />
             ))}

@@ -4,7 +4,7 @@ import { useState, memo } from "react"
 import { SelectComment } from "@/db/schema"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { cn } from "@/lib/utils"
-import { MoreHorizontal, Edit2, Trash2, Check, Reply } from "lucide-react"
+import { MoreHorizontal, Edit2, Trash2, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -146,34 +146,13 @@ export const CommentDisplay = memo(function CommentDisplay({
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-44 bg-white">
               <DropdownMenuItem
                 onClick={() => setIsEditing(true)}
                 className="text-sm"
               >
                 <Edit2 className="mr-2 size-4" />
                 Edit comment
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onToggleResolved?.(comment.id)}
-                className={cn(
-                  "text-sm",
-                  comment.resolved
-                    ? "text-orange-600 focus:text-orange-700"
-                    : "text-green-600 focus:text-green-700"
-                )}
-              >
-                {comment.resolved ? (
-                  <>
-                    <Reply className="mr-2 size-4" />
-                    Reopen comment
-                  </>
-                ) : (
-                  <>
-                    <Check className="mr-2 size-4" />
-                    Resolve comment
-                  </>
-                )}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => onDelete?.(comment.id)}
