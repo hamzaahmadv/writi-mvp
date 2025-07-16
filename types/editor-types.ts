@@ -79,4 +79,9 @@ export interface EditorActions {
   showSlashMenu: (blockId: string, position: { x: number; y: number }) => void
   hideSlashMenu: () => void
   executeSlashCommand: (command: SlashCommand, blockId: string) => void
+  navigateToPreviousBlock: (
+    currentBlockId: string,
+    cursorOffset?: number
+  ) => void
+  navigateToNextBlock: (currentBlockId: string, cursorOffset?: number) => void
 }

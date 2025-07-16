@@ -684,6 +684,202 @@ export default function WritiEditor({
         }
       },
       [isEssential, updateEssentialBlock, updateBlockInDb]
+    ),
+
+    navigateToPreviousBlock: useCallback(
+      (currentBlockId: string, cursorOffset?: number) => {
+        const currentIndex = currentBlocks.findIndex(
+          block => block.id === currentBlockId
+        )
+        if (currentIndex > 0) {
+          const previousBlock = currentBlocks[currentIndex - 1]
+
+          // Get current cursor position for vertical alignment
+          const currentBlockElement = document.querySelector(
+            `[data-block-id="${currentBlockId}"] [contenteditable]`
+          ) as HTMLElement
+          let targetHorizontalOffset = cursorOffset
+
+          if (currentBlockElement && cursorOffset === undefined) {
+            const selection = window.getSelection()
+            if (selection && selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0)
+              const rect = range.getBoundingClientRect()
+              const blockRect = currentBlockElement.getBoundingClientRect()
+              targetHorizontalOffset = rect.left - blockRect.left
+            }
+          }
+
+          setEditorState(prev => ({
+            ...prev,
+            focusedBlockId: previousBlock.id
+          }))
+
+          // Use setTimeout to ensure the block is focused after React update
+          setTimeout(() => {
+            const blockElement = document.querySelector(
+              `[data-block-id="${previousBlock.id}"] [contenteditable]`
+            ) as HTMLElement
+            if (blockElement) {
+              blockElement.focus()
+
+              // Position cursor to maintain vertical alignment
+              const selection = window.getSelection()
+              const range = document.createRange()
+
+              try {
+                if (
+                  targetHorizontalOffset !== undefined &&
+                  typeof targetHorizontalOffset === "number"
+                ) {
+                  // Use horizontal offset for better vertical alignment
+                  const blockRect = blockElement.getBoundingClientRect()
+                  const targetX = blockRect.left + targetHorizontalOffset
+
+                  // Find the closest character position
+                  let bestOffset = 0
+                  let bestDistance = Infinity
+
+                  const textContent = blockElement.textContent || ""
+                  for (let i = 0; i <= textContent.length; i++) {
+                    range.setStart(blockElement.firstChild || blockElement, i)
+                    range.setEnd(blockElement.firstChild || blockElement, i)
+                    const charRect = range.getBoundingClientRect()
+                    const distance = Math.abs(charRect.left - targetX)
+
+                    if (distance < bestDistance) {
+                      bestDistance = distance
+                      bestOffset = i
+                    }
+                  }
+
+                  range.setStart(
+                    blockElement.firstChild || blockElement,
+                    bestOffset
+                  )
+                  range.setEnd(
+                    blockElement.firstChild || blockElement,
+                    bestOffset
+                  )
+                } else {
+                  // Default: position cursor at end
+                  range.selectNodeContents(blockElement)
+                  range.collapse(false)
+                }
+
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+              } catch (error) {
+                // Fallback to end of block if range setting fails
+                const range = document.createRange()
+                range.selectNodeContents(blockElement)
+                range.collapse(false)
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+              }
+            }
+          }, 0)
+        }
+      },
+      [currentBlocks]
+    ),
+
+    navigateToNextBlock: useCallback(
+      (currentBlockId: string, cursorOffset?: number) => {
+        const currentIndex = currentBlocks.findIndex(
+          block => block.id === currentBlockId
+        )
+        if (currentIndex < currentBlocks.length - 1) {
+          const nextBlock = currentBlocks[currentIndex + 1]
+
+          // Get current cursor position for vertical alignment
+          const currentBlockElement = document.querySelector(
+            `[data-block-id="${currentBlockId}"] [contenteditable]`
+          ) as HTMLElement
+          let targetHorizontalOffset = cursorOffset
+
+          if (currentBlockElement && cursorOffset === undefined) {
+            const selection = window.getSelection()
+            if (selection && selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0)
+              const rect = range.getBoundingClientRect()
+              const blockRect = currentBlockElement.getBoundingClientRect()
+              targetHorizontalOffset = rect.left - blockRect.left
+            }
+          }
+
+          setEditorState(prev => ({
+            ...prev,
+            focusedBlockId: nextBlock.id
+          }))
+
+          // Use setTimeout to ensure the block is focused after React update
+          setTimeout(() => {
+            const blockElement = document.querySelector(
+              `[data-block-id="${nextBlock.id}"] [contenteditable]`
+            ) as HTMLElement
+            if (blockElement) {
+              blockElement.focus()
+
+              // Position cursor to maintain vertical alignment
+              const selection = window.getSelection()
+              const range = document.createRange()
+
+              try {
+                if (
+                  targetHorizontalOffset !== undefined &&
+                  typeof targetHorizontalOffset === "number"
+                ) {
+                  // Use horizontal offset for better vertical alignment
+                  const blockRect = blockElement.getBoundingClientRect()
+                  const targetX = blockRect.left + targetHorizontalOffset
+
+                  // Find the closest character position
+                  let bestOffset = 0
+                  let bestDistance = Infinity
+
+                  const textContent = blockElement.textContent || ""
+                  for (let i = 0; i <= textContent.length; i++) {
+                    range.setStart(blockElement.firstChild || blockElement, i)
+                    range.setEnd(blockElement.firstChild || blockElement, i)
+                    const charRect = range.getBoundingClientRect()
+                    const distance = Math.abs(charRect.left - targetX)
+
+                    if (distance < bestDistance) {
+                      bestDistance = distance
+                      bestOffset = i
+                    }
+                  }
+
+                  range.setStart(
+                    blockElement.firstChild || blockElement,
+                    bestOffset
+                  )
+                  range.setEnd(
+                    blockElement.firstChild || blockElement,
+                    bestOffset
+                  )
+                } else {
+                  // Default: position cursor at start
+                  range.setStart(blockElement, 0)
+                  range.setEnd(blockElement, 0)
+                }
+
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+              } catch (error) {
+                // Fallback to start of block if range setting fails
+                const range = document.createRange()
+                range.setStart(blockElement, 0)
+                range.setEnd(blockElement, 0)
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+              }
+            }
+          }, 0)
+        }
+      },
+      [currentBlocks]
     )
   }
 

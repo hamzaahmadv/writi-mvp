@@ -206,14 +206,63 @@ export function BlockRenderer({
       }
     }
 
-    // Arrow navigation
-    if (e.key === "ArrowUp" && e.metaKey) {
-      e.preventDefault()
-      // Navigate to previous block
+    // Arrow navigation - handle both regular and meta+arrow
+    if (e.key === "ArrowUp") {
+      const selection = window.getSelection()
+      if (!selection || selection.rangeCount === 0) return
+
+      const range = selection.getRangeAt(0)
+
+      // Check if cursor is at the beginning of the first line
+      const isAtTopOfBlock = () => {
+        if (cursorAtStart) return true
+
+        // For single-line blocks, check if we're at the start
+        const element = e.currentTarget as HTMLElement
+        const rect = element.getBoundingClientRect()
+        if (rect.height <= 30) return cursorAtStart // Single line
+
+        // For multi-line blocks, check if cursor is in first line
+        const cursorRect = range.getBoundingClientRect()
+        return cursorRect.top <= rect.top + 25 // Within first line
+      }
+
+      if (isAtTopOfBlock() || e.metaKey) {
+        e.preventDefault()
+        // Pass undefined to let the navigation function calculate horizontal offset
+        actions.navigateToPreviousBlock(block.id)
+      }
     }
-    if (e.key === "ArrowDown" && e.metaKey) {
-      e.preventDefault()
-      // Navigate to next block
+
+    if (e.key === "ArrowDown") {
+      const selection = window.getSelection()
+      if (!selection || selection.rangeCount === 0) return
+
+      const range = selection.getRangeAt(0)
+
+      // Check if cursor is at the end of the last line
+      const isAtBottomOfBlock = () => {
+        const element = e.currentTarget as HTMLElement
+        const rect = element.getBoundingClientRect()
+        const cursorRect = range.getBoundingClientRect()
+
+        // For single-line blocks, check if we're at the end
+        if (rect.height <= 30) {
+          return range.endOffset === (element.textContent?.length || 0)
+        }
+
+        // For multi-line blocks, check if cursor is in last line
+        return (
+          cursorRect.bottom >= rect.bottom - 25 &&
+          range.endOffset === (element.textContent?.length || 0)
+        )
+      }
+
+      if (isAtBottomOfBlock() || e.metaKey) {
+        e.preventDefault()
+        // Pass undefined to let the navigation function calculate horizontal offset
+        actions.navigateToNextBlock(block.id)
+      }
     }
   }
 
@@ -619,6 +668,7 @@ export function BlockRenderer({
   return (
     <motion.div
       ref={setNodeRef}
+      data-block-id={block.id}
       initial={{ opacity: 0, y: 1 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0, ease: "easeOut" }}
