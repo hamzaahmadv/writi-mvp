@@ -632,9 +632,91 @@ export default function WritiEditor({
     selectBlock: useCallback((id: string, addToSelection = false) => {
       setEditorState(prev => ({
         ...prev,
-        selectedBlockIds: addToSelection ? [...prev.selectedBlockIds, id] : [id]
+        selectedBlockIds: addToSelection
+          ? prev.selectedBlockIds.includes(id)
+            ? prev.selectedBlockIds.filter(blockId => blockId !== id)
+            : [...prev.selectedBlockIds, id]
+          : [id]
       }))
     }, []),
+
+    selectBlockRange: useCallback(
+      (startId: string, endId: string) => {
+        const startIndex = currentBlocks.findIndex(
+          block => block.id === startId
+        )
+        const endIndex = currentBlocks.findIndex(block => block.id === endId)
+
+        if (startIndex === -1 || endIndex === -1) return
+
+        const minIndex = Math.min(startIndex, endIndex)
+        const maxIndex = Math.max(startIndex, endIndex)
+        const rangeBlockIds = currentBlocks
+          .slice(minIndex, maxIndex + 1)
+          .map(block => block.id)
+
+        setEditorState(prev => ({
+          ...prev,
+          selectedBlockIds: rangeBlockIds
+        }))
+      },
+      [currentBlocks]
+    ),
+
+    selectMultipleBlocks: useCallback((blockIds: string[]) => {
+      setEditorState(prev => ({
+        ...prev,
+        selectedBlockIds: blockIds
+      }))
+    }, []),
+
+    selectAllBlocks: useCallback(() => {
+      setEditorState(prev => ({
+        ...prev,
+        selectedBlockIds: currentBlocks.map(block => block.id)
+      }))
+    }, [currentBlocks]),
+
+    clearSelection: useCallback(() => {
+      setEditorState(prev => ({
+        ...prev,
+        selectedBlockIds: []
+      }))
+    }, []),
+
+    deleteSelectedBlocks: useCallback(async () => {
+      const blockIdsToDelete = editorState.selectedBlockIds
+      if (blockIdsToDelete.length === 0) return
+
+      try {
+        // Delete blocks in parallel for better performance
+        await Promise.all(
+          blockIdsToDelete.map(async blockId => {
+            if (isEssential) {
+              await deleteEssentialBlock(blockId)
+            } else {
+              await deleteBlockInDb(blockId)
+            }
+          })
+        )
+
+        // Clear selection and focused block if it was deleted
+        setEditorState(prev => ({
+          ...prev,
+          selectedBlockIds: [],
+          focusedBlockId: blockIdsToDelete.includes(prev.focusedBlockId || "")
+            ? null
+            : prev.focusedBlockId
+        }))
+      } catch (error) {
+        console.error("Failed to delete selected blocks:", error)
+      }
+    }, [
+      editorState.selectedBlockIds,
+      isEssential,
+      deleteEssentialBlock,
+      deleteBlockInDb
+    ]),
 
     showSlashMenu: useCallback(
       (blockId: string, position: { x: number; y: number }) => {
@@ -897,6 +979,81 @@ export default function WritiEditor({
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [editorState.showSlashMenu, actions])
+
+  // Handle keyboard shortcuts for multi-block selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+A / Ctrl+A - Select all blocks
+      if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        actions.selectAllBlocks()
+        return
+      }
+
+      // Escape - Clear selection
+      if (e.key === "Escape") {
+        if (editorState.selectedBlockIds.length > 0) {
+          e.preventDefault()
+          actions.clearSelection()
+          return
+        }
+      }
+
+      // Backspace/Delete - Delete selected blocks (only if multiple blocks selected)
+      if (
+        (e.key === "Backspace" || e.key === "Delete") &&
+        editorState.selectedBlockIds.length > 1
+      ) {
+        e.preventDefault()
+        actions.deleteSelectedBlocks()
+        return
+      }
+
+      // Arrow keys with Shift - Extend selection
+      if (e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+        e.preventDefault()
+        const currentFocused = editorState.focusedBlockId
+        if (currentFocused) {
+          const currentIndex = currentBlocks.findIndex(
+            block => block.id === currentFocused
+          )
+          if (currentIndex !== -1) {
+            let targetIndex = currentIndex
+            if (e.key === "ArrowUp" && currentIndex > 0) {
+              targetIndex = currentIndex - 1
+            } else if (
+              e.key === "ArrowDown" &&
+              currentIndex < currentBlocks.length - 1
+            ) {
+              targetIndex = currentIndex + 1
+            }
+
+            if (targetIndex !== currentIndex) {
+              const targetBlock = currentBlocks[targetIndex]
+              if (editorState.selectedBlockIds.length > 0) {
+                // Extend selection
+                const firstSelected = editorState.selectedBlockIds[0]
+                actions.selectBlockRange(firstSelected, targetBlock.id)
+              } else {
+                // Start selection
+                actions.selectBlockRange(currentFocused, targetBlock.id)
+              }
+              actions.focusBlock(targetBlock.id)
+            }
+          }
+        }
+        return
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => document.removeEventListener("keydown", handleKeyDown)
+  }, [
+    editorState.selectedBlockIds,
+    editorState.focusedBlockId,
+    currentBlocks,
+    actions
+  ])
 
   // Skip loading for preloaded pages, show skeleton for others
   if (

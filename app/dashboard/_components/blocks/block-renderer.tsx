@@ -677,17 +677,66 @@ export function BlockRenderer({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0, ease: "easeOut" }}
       className={`
-        group relative py-1 transition-all duration-75
-        ${isFocused ? "bg-blue-50/30" : ""}
-        ${isSelected ? "bg-blue-50" : "hover:bg-gray-50/30"}
-        ${isDragging ? "z-50" : ""}
+        group relative py-1 transition-all duration-150
+        ${isFocused && !isSelected ? "bg-blue-50/30 ring-1 ring-blue-200/50" : ""}
+        ${isSelected ? "bg-blue-100/70 shadow-sm ring-2 ring-blue-300" : "hover:bg-gray-50/50"}
+        ${isDragging ? "z-50 shadow-lg" : ""}
+        ${isSelected && isFocused ? "ring-blue-400" : ""}
       `}
       style={{
         marginLeft: level > 0 ? `${level * 24}px` : undefined,
         ...style
       }}
+      role="option"
+      aria-selected={isSelected}
+      aria-label={`${block.type} block${isSelected ? ", selected" : ""}${isFocused ? ", focused" : ""}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      onMouseDown={e => {
+        // Only handle direct clicks on the block container (not child elements)
+        if (e.target === e.currentTarget) {
+          if (e.metaKey || e.ctrlKey) {
+            e.preventDefault()
+            // DON'T stop propagation - let container handle drag selection
+            // Toggle selection for this block
+            actions.selectBlock(block.id, true)
+          } else if (e.shiftKey) {
+            e.preventDefault()
+            // DON'T stop propagation - let container handle drag selection
+            // Range selection - if there's a focused block, select range to this block
+            const focusedBlockId = document
+              .querySelector('[role="option"][aria-selected="true"]')
+              ?.getAttribute("data-block-id")
+            if (focusedBlockId && focusedBlockId !== block.id) {
+              actions.selectBlockRange(focusedBlockId, block.id)
+            } else {
+              actions.selectBlock(block.id)
+            }
+            actions.focusBlock(block.id)
+          }
+          // For regular clicks, let the parent container handle drag selection
+          // Don't prevent default or stop propagation for regular clicks
+        }
+      }}
+      onClick={e => {
+        // Handle clicks on the block content area
+        if (e.metaKey || e.ctrlKey) {
+          e.preventDefault()
+          actions.selectBlock(block.id, true)
+        } else if (e.shiftKey) {
+          e.preventDefault()
+          // Range selection from last focused block
+          const focusedBlockId = document
+            .querySelector('[role="option"][aria-selected="true"]')
+            ?.getAttribute("data-block-id")
+          if (focusedBlockId && focusedBlockId !== block.id) {
+            actions.selectBlockRange(focusedBlockId, block.id)
+          } else {
+            actions.selectBlock(block.id)
+          }
+          actions.focusBlock(block.id)
+        }
+      }}
     >
       {/* Block Controls */}
       <div className="flex items-center gap-2">
@@ -696,6 +745,7 @@ export function BlockRenderer({
             variant="ghost"
             size="icon"
             className="size-6 cursor-grab p-0 text-gray-400 hover:text-gray-600 active:cursor-grabbing"
+            data-dnd-kit-drag-handle="true"
             {...attributes}
             {...listeners}
           >

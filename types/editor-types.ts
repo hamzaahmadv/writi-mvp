@@ -76,6 +76,11 @@ export interface EditorActions {
   unindentBlock: (id: string) => void
   focusBlock: (id: string) => void
   selectBlock: (id: string, addToSelection?: boolean) => void
+  selectBlockRange: (startId: string, endId: string) => void
+  selectMultipleBlocks: (blockIds: string[]) => void
+  selectAllBlocks: () => void
+  clearSelection: () => void
+  deleteSelectedBlocks: () => Promise<void>
   showSlashMenu: (blockId: string, position: { x: number; y: number }) => void
   hideSlashMenu: () => void
   executeSlashCommand: (command: SlashCommand, blockId: string) => void
