@@ -206,17 +206,67 @@ export function BlockRenderer({
       }
     }
 
-    // Arrow navigation - always navigate between blocks
+    // Arrow navigation - smart detection for within-block vs between-block movement
     if (e.key === "ArrowUp") {
-      e.preventDefault()
-      // Always navigate to previous block, maintaining horizontal cursor position
-      actions.navigateToPreviousBlock(block.id)
+      const selection = window.getSelection()
+      if (!selection || selection.rangeCount === 0) {
+        // Fallback to block navigation if no selection
+        e.preventDefault()
+        actions.navigateToPreviousBlock(block.id)
+        return
+      }
+
+      const range = selection.getRangeAt(0)
+      const element = e.currentTarget as HTMLElement
+
+      // Check if this is a multi-line block and cursor can move up within it
+      const canMoveUpWithinBlock = () => {
+        const elementRect = element.getBoundingClientRect()
+        const cursorRect = range.getBoundingClientRect()
+
+        // If block is tall enough for multiple lines and cursor isn't at the very top
+        return elementRect.height > 30 && cursorRect.top - elementRect.top > 20
+      }
+
+      if (canMoveUpWithinBlock()) {
+        // Let browser handle natural line navigation within block
+      } else {
+        // Navigate to previous block
+        e.preventDefault()
+        actions.navigateToPreviousBlock(block.id)
+      }
     }
 
     if (e.key === "ArrowDown") {
-      e.preventDefault()
-      // Always navigate to next block, maintaining horizontal cursor position
-      actions.navigateToNextBlock(block.id)
+      const selection = window.getSelection()
+      if (!selection || selection.rangeCount === 0) {
+        // Fallback to block navigation if no selection
+        e.preventDefault()
+        actions.navigateToNextBlock(block.id)
+        return
+      }
+
+      const range = selection.getRangeAt(0)
+      const element = e.currentTarget as HTMLElement
+
+      // Check if this is a multi-line block and cursor can move down within it
+      const canMoveDownWithinBlock = () => {
+        const elementRect = element.getBoundingClientRect()
+        const cursorRect = range.getBoundingClientRect()
+
+        // If block is tall enough for multiple lines and cursor isn't at the very bottom
+        return (
+          elementRect.height > 30 && elementRect.bottom - cursorRect.bottom > 20
+        )
+      }
+
+      if (canMoveDownWithinBlock()) {
+        // Let browser handle natural line navigation within block
+      } else {
+        // Navigate to next block
+        e.preventDefault()
+        actions.navigateToNextBlock(block.id)
+      }
     }
   }
 
