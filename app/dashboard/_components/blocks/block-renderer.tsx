@@ -736,7 +736,7 @@ export function BlockRenderer({
       }}
     >
       {/* Left Controls - Positioned outside left margin */}
-      <div className="absolute -left-20 top-0 flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+      <div className="absolute -left-20 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
         <Button
           variant="ghost"
           size="icon"
@@ -761,7 +761,7 @@ export function BlockRenderer({
       <div className="w-full">{renderBlockContent()}</div>
 
       {/* Right Controls - Positioned outside right margin */}
-      <div className="absolute -right-20 top-0 flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+      <div className="absolute -right-20 top-1/2 flex -translate-y-1/2 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
         <Button
           variant="ghost"
           size="icon"
