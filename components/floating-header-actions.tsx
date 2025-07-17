@@ -10,6 +10,7 @@ interface FloatingHeaderActionsProps {
   onAddComment: () => void
   className?: string
   children?: React.ReactNode
+  hasCover?: boolean
 }
 
 export function FloatingHeaderActions({
@@ -17,7 +18,8 @@ export function FloatingHeaderActions({
   onAddCover,
   onAddComment,
   className = "",
-  children
+  children,
+  hasCover = false
 }: FloatingHeaderActionsProps) {
   // Always start with hidden state
   const [isVisible, setIsVisible] = useState(false)
@@ -33,14 +35,14 @@ export function FloatingHeaderActions({
         }
       }}
     >
-      {/* Invisible hover trigger zone */}
+      {/* Invisible hover trigger zone - adjusted for cover presence */}
       <div
-        className="absolute inset-x-0 -top-12 z-10 h-24"
+        className={`absolute inset-x-0 z-10 h-24 ${hasCover ? "-top-12" : "-top-12"}`}
         onMouseEnter={() => setIsVisible(true)}
         onMouseLeave={() => setIsVisible(false)}
       />
 
-      {/* Floating action buttons */}
+      {/* Floating action buttons - adjusted positioning for cover */}
       <AnimatePresence mode="wait">
         {isVisible && (
           <motion.div
@@ -48,7 +50,7 @@ export function FloatingHeaderActions({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
-            className="absolute -top-10 left-0 z-20 flex gap-6"
+            className={`absolute left-0 z-20 flex gap-6 ${hasCover ? "-top-10" : "-top-10"}`}
             style={{ pointerEvents: isVisible ? "auto" : "none" }}
             onMouseEnter={() => setIsVisible(true)}
             onMouseLeave={() => setIsVisible(false)}

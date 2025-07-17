@@ -9,6 +9,7 @@ interface SafeFloatingHeaderProps {
   onAddComment: () => void
   className?: string
   children?: React.ReactNode
+  hasCover?: boolean
 }
 
 // This wrapper ensures floating headers are NEVER visible on initial page load
@@ -18,7 +19,8 @@ export function SafeFloatingHeader({
   onAddCover,
   onAddComment,
   className = "",
-  children
+  children,
+  hasCover = false
 }: SafeFloatingHeaderProps) {
   const [isMounted, setIsMounted] = useState(false)
   const [hasInteracted, setHasInteracted] = useState(false)
@@ -54,6 +56,7 @@ export function SafeFloatingHeader({
           onAddIcon={onAddIcon}
           onAddCover={onAddCover}
           onAddComment={onAddComment}
+          hasCover={hasCover}
         >
           {children}
         </FloatingHeaderActions>

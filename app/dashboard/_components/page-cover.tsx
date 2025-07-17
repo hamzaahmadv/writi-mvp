@@ -50,7 +50,8 @@ export default function PageCoverDisplay({
 
   return (
     <div
-      className="group relative h-60 w-full"
+      className="group relative w-full"
+      style={{ height: "280px" }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

@@ -1377,6 +1377,15 @@ export default function WritiEditor({
 
       {/* Editor Content */}
       <div className="flex-1 overflow-auto bg-white">
+        {/* Page Cover Display - Full Width */}
+        {currentPage?.coverImage && (
+          <PageCoverDisplay
+            cover={JSON.parse(currentPage.coverImage) as PageCover}
+            onChangeCover={() => setIsCoverPickerOpen(true)}
+            onRemoveCover={() => onUpdatePage({ coverImage: null })}
+          />
+        )}
+
         <div className="mx-auto max-w-3xl px-6 py-8">
           {/* Page Icon - Only show if it exists */}
           {(currentPage.icon || currentPage.emoji) && (
@@ -1401,18 +1410,9 @@ export default function WritiEditor({
             />
           )}
 
-          {/* Page Cover Display */}
-          {currentPage?.coverImage && (
-            <PageCoverDisplay
-              cover={JSON.parse(currentPage.coverImage) as PageCover}
-              onChangeCover={() => setIsCoverPickerOpen(true)}
-              onRemoveCover={() => onUpdatePage({ coverImage: null })}
-            />
-          )}
-
           {/* Notion-style Page Header - Left Aligned */}
           <div
-            className={`${currentPage?.coverImage ? "mt-4" : "mt-8"} flex flex-col pl-8`}
+            className={`${currentPage?.coverImage ? "mt-8" : "mt-8"} flex flex-col pl-8`}
           >
             {/* Page Title with Floating Actions */}
             <SafeFloatingHeader
@@ -1422,6 +1422,7 @@ export default function WritiEditor({
                 setShowCommentInput(!showCommentInput)
                 setCommentUserInteracted(true)
               }}
+              hasCover={!!currentPage?.coverImage}
             >
               <div className="space-y-3">
                 <h1
