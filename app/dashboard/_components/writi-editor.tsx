@@ -71,7 +71,7 @@ export default function WritiEditor({
           await updateBlockInDb(blockId, updates)
         }
       },
-      150 // Batch timeout in milliseconds
+      50 // Reduced batch timeout for faster block updates
     )
 
   // Blocks management - use database for regular pages, localStorage for essentials
@@ -806,8 +806,8 @@ export default function WritiEditor({
             focusedBlockId: previousBlock.id
           }))
 
-          // Use setTimeout to ensure the block is focused after React update
-          setTimeout(() => {
+          // Use requestAnimationFrame for immediate DOM focus after React update
+          requestAnimationFrame(() => {
             const blockElement = document.querySelector(
               `[data-block-id="${previousBlock.id}"] [contenteditable]`
             ) as HTMLElement
@@ -869,7 +869,7 @@ export default function WritiEditor({
                 selection?.addRange(range)
               }
             }
-          }, 0)
+          })
         }
       },
       [currentBlocks]
@@ -904,8 +904,8 @@ export default function WritiEditor({
             focusedBlockId: nextBlock.id
           }))
 
-          // Use setTimeout to ensure the block is focused after React update
-          setTimeout(() => {
+          // Use requestAnimationFrame for immediate DOM focus after React update
+          requestAnimationFrame(() => {
             const blockElement = document.querySelector(
               `[data-block-id="${nextBlock.id}"] [contenteditable]`
             ) as HTMLElement
@@ -967,7 +967,7 @@ export default function WritiEditor({
                 selection?.addRange(range)
               }
             }
-          }, 0)
+          })
         }
       },
       [currentBlocks]
@@ -1261,7 +1261,7 @@ export default function WritiEditor({
                     selection.removeAllRanges()
                     selection.addRange(range)
                   }
-                }, 0)
+                })
               }}
             >
               <svg
@@ -1296,7 +1296,7 @@ export default function WritiEditor({
                     selection.removeAllRanges()
                     selection.addRange(range)
                   }
-                }, 0)
+                })
               }}
             >
               {currentPage.title}
@@ -1468,7 +1468,7 @@ export default function WritiEditor({
                           selection.removeAllRanges()
                           selection.addRange(range)
                         }
-                      }, 0)
+                      })
                     }
                   }}
                   onBlur={e => {
