@@ -1098,8 +1098,8 @@ export default function WritiEditor({
 
         {/* Content Skeleton */}
         <div className="flex-1 overflow-auto bg-white">
-          <div className="mx-auto max-w-3xl px-6 py-8">
-            <div className="mt-8 flex flex-col pl-8">
+          <div className="mx-auto max-w-3xl px-24 py-8">
+            <div className="mt-8 flex flex-col">
               {/* Title Skeleton */}
               <div className="space-y-3">
                 <div className="h-12 w-96 animate-pulse rounded bg-gray-200" />
@@ -1107,7 +1107,7 @@ export default function WritiEditor({
             </div>
 
             {/* Blocks Skeleton */}
-            <div className="mt-4 space-y-3 pl-8">
+            <div className="mt-4 space-y-3">
               <div className="h-6 w-full animate-pulse rounded bg-gray-200" />
               <div className="h-6 w-4/5 animate-pulse rounded bg-gray-200" />
               <div className="h-6 w-3/4 animate-pulse rounded bg-gray-200" />
@@ -1386,7 +1386,7 @@ export default function WritiEditor({
           />
         )}
 
-        <div className="mx-auto max-w-3xl px-6 py-8">
+        <div className="mx-auto max-w-3xl px-24 py-8">
           {/* Page Icon - Only show if it exists */}
           {(currentPage.icon || currentPage.emoji) && (
             <PageIcon
@@ -1412,7 +1412,7 @@ export default function WritiEditor({
 
           {/* Notion-style Page Header - Left Aligned */}
           <div
-            className={`${currentPage?.coverImage ? "mt-4" : "mt-8"} flex flex-col pl-8`}
+            className={`${currentPage?.coverImage ? "mt-4" : "mt-8"} flex flex-col`}
           >
             {/* Page Title with Floating Actions */}
             <SafeFloatingHeader
@@ -1523,7 +1523,6 @@ export default function WritiEditor({
                   pageId={currentPage.id}
                   isVisible={showCommentInput}
                   onClose={() => setShowCommentInput(false)}
-                  className="max-w-2xl"
                   userInteracted={commentUserInteracted}
                 />
               </div>
@@ -1531,7 +1530,7 @@ export default function WritiEditor({
           </div>
 
           {/* Content Area with proper spacing and alignment */}
-          <div className="mt-4 pl-8">
+          <div className="mt-4">
             {/* Blocks Content */}
             <DraggableBlockList
               blocks={currentBlocks}

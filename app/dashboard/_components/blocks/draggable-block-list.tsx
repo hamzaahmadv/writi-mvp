@@ -409,7 +409,10 @@ export function DraggableBlockList({
           role="listbox"
           aria-multiselectable="true"
           aria-label={`Block editor with ${blocks.length} blocks${editorState.selectedBlockIds.length > 0 ? `, ${editorState.selectedBlockIds.length} selected` : ""}`}
-          style={{ userSelect: isSelecting ? "none" : "auto" }}
+          style={{
+            userSelect: isSelecting ? "none" : "auto",
+            overflow: "visible"
+          }}
         >
           {blocks.map((block, index) => {
             // Calculate list number for numbered_list blocks

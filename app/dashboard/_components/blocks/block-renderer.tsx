@@ -494,8 +494,8 @@ export function BlockRenderer({
 
       case "bulleted_list":
         return (
-          <div className="flex items-center gap-3">
-            <div className="size-1.5 shrink-0 rounded-full bg-gray-400" />
+          <div className="flex items-start gap-3">
+            <div className="mt-2 size-1.5 shrink-0 rounded-full bg-gray-400" />
             <div
               {...commonProps}
               className={`${commonProps.className} text-gray-700`}
@@ -511,8 +511,8 @@ export function BlockRenderer({
 
       case "numbered_list":
         return (
-          <div className="flex items-center gap-3">
-            <div className="min-w-[24px] shrink-0 font-medium text-gray-500">
+          <div className="flex items-start gap-3">
+            <div className="min-w-[24px] shrink-0 pt-0.5 font-medium text-gray-500">
               {listNumber || 1}.
             </div>
             <div
@@ -735,50 +735,50 @@ export function BlockRenderer({
         }
       }}
     >
-      {/* Block Controls */}
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 cursor-grab p-0 text-gray-400 hover:text-gray-600 active:cursor-grabbing"
-            data-dnd-kit-drag-handle="true"
-            {...attributes}
-            {...listeners}
-          >
-            <GripVertical className="size-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 p-0 text-gray-400 hover:text-gray-600"
-            onClick={() => actions.createBlock(block.id)}
-          >
-            <Plus className="size-3" />
-          </Button>
-        </div>
+      {/* Left Controls - Positioned outside left margin */}
+      <div className="absolute -left-20 top-0 flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 cursor-grab p-0 text-gray-400 hover:text-gray-600 active:cursor-grabbing"
+          data-dnd-kit-drag-handle="true"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 p-0 text-gray-400 hover:text-gray-600"
+          onClick={() => actions.createBlock(block.id)}
+        >
+          <Plus className="size-3" />
+        </Button>
+      </div>
 
-        <div className="min-w-0 flex-1">{renderBlockContent()}</div>
+      {/* Main Content - Full width */}
+      <div className="w-full">{renderBlockContent()}</div>
 
-        <div className="flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 p-0 text-gray-400 hover:text-gray-600"
-            onClick={handleCopyBlock}
-            title="Copy block content"
-          >
-            <Copy className="size-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-6 p-0 text-gray-400 hover:text-red-500"
-            onClick={() => actions.deleteBlock(block.id)}
-          >
-            <Trash2 className="size-3" />
-          </Button>
-        </div>
+      {/* Right Controls - Positioned outside right margin */}
+      <div className="absolute -right-20 top-0 flex items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 p-0 text-gray-400 hover:text-gray-600"
+          onClick={handleCopyBlock}
+          title="Copy block content"
+        >
+          <Copy className="size-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-6 p-0 text-gray-400 hover:text-red-500"
+          onClick={() => actions.deleteBlock(block.id)}
+        >
+          <Trash2 className="size-3" />
+        </Button>
       </div>
 
       {/* Render children blocks */}
