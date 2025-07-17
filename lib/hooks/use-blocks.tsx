@@ -124,7 +124,10 @@ export function useBlocks(
 
     // Determine order
     let order = 0
-    if (afterId) {
+    if (afterId === "first") {
+      // For first position, use order -1 to place before all existing blocks
+      order = 0
+    } else if (afterId) {
       const afterIndex = blocks.findIndex(b => b.id === afterId)
       if (afterIndex !== -1) {
         order = afterIndex + 1
@@ -144,7 +147,10 @@ export function useBlocks(
     // Optimistic update
     setBlocks(prev => {
       const newBlocks = [...prev]
-      if (afterId) {
+      if (afterId === "first") {
+        // Insert at the beginning for first position
+        newBlocks.unshift(newBlock)
+      } else if (afterId) {
         const afterIndex = newBlocks.findIndex(b => b.id === afterId)
         if (afterIndex !== -1) {
           newBlocks.splice(afterIndex + 1, 0, newBlock)

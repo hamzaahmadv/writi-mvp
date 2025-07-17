@@ -302,7 +302,10 @@ export default function WritiEditor({
       setEssentialBlocks(prev => {
         const newBlocks = [...prev]
 
-        if (afterId) {
+        if (afterId === "first") {
+          // Insert at the beginning for first position
+          newBlocks.unshift(newBlock)
+        } else if (afterId) {
           const afterIndex = newBlocks.findIndex(b => b.id === afterId)
           if (afterIndex !== -1) {
             newBlocks.splice(afterIndex + 1, 0, newBlock)
@@ -1495,9 +1498,9 @@ export default function WritiEditor({
                       // Blur title to remove focus
                       titleRef.current?.blur()
 
-                      // Create and focus new paragraph block instantly
+                      // Create and focus new paragraph block at first position
                       await actions.createBlock(
-                        undefined,
+                        "first",
                         "paragraph",
                         true // auto-focus on user interaction
                       )
