@@ -1248,8 +1248,17 @@ export default function WritiEditor({
               size="sm"
               className="size-8 rounded-md p-0 hover:bg-gray-100"
               onClick={() => {
-                // TODO: Enable title editing
-                console.log("Edit title")
+                titleRef.current?.focus()
+                // Select all text for easy replacement
+                setTimeout(() => {
+                  const range = document.createRange()
+                  const selection = window.getSelection()
+                  if (titleRef.current && selection) {
+                    range.selectNodeContents(titleRef.current)
+                    selection.removeAllRanges()
+                    selection.addRange(range)
+                  }
+                }, 0)
               }}
             >
               <svg
@@ -1274,8 +1283,17 @@ export default function WritiEditor({
                 fontFamily: "var(--font-body)"
               }}
               onClick={() => {
-                // TODO: Enable title editing
-                console.log("Edit title")
+                titleRef.current?.focus()
+                // Select all text for easy replacement
+                setTimeout(() => {
+                  const range = document.createRange()
+                  const selection = window.getSelection()
+                  if (titleRef.current && selection) {
+                    range.selectNodeContents(titleRef.current)
+                    selection.removeAllRanges()
+                    selection.addRange(range)
+                  }
+                }, 0)
               }}
             >
               {currentPage.title}

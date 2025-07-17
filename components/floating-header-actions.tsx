@@ -37,7 +37,11 @@ export function FloatingHeaderActions({
     >
       {/* Invisible hover trigger zone - adjusted for cover presence */}
       <div
-        className={`absolute inset-x-0 z-10 h-24 ${hasCover ? "-top-10" : "-top-12"}`}
+        className={`absolute inset-x-0 h-24 ${hasCover ? "-top-10" : "-top-12"}`}
+        style={{
+          pointerEvents: "auto",
+          zIndex: -1
+        }}
         onMouseEnter={() => setIsVisible(true)}
         onMouseLeave={() => setIsVisible(false)}
       />
