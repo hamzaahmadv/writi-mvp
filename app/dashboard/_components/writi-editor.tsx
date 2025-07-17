@@ -22,6 +22,8 @@ import { DraggableBlockList } from "./blocks/draggable-block-list"
 import { SlashCommandMenu } from "./blocks/slash-command-menu"
 import PageIcon from "./page-icon"
 import IconPicker from "./icon-picker"
+import PageCoverDisplay from "./page-cover"
+import CoverPicker from "./cover-picker"
 import { CommentsSection } from "@/components/comments/comments-section"
 import { SafeFloatingHeader } from "@/components/safe-floating-header"
 import {
@@ -29,7 +31,8 @@ import {
   BlockType,
   EditorState,
   EditorActions,
-  SlashCommand
+  SlashCommand,
+  PageCover
 } from "@/types"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { useBlocks } from "@/lib/hooks/use-blocks"
@@ -159,6 +162,9 @@ export default function WritiEditor({
 
   // Icon picker state
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false)
+
+  // Cover picker state
+  const [isCoverPickerOpen, setIsCoverPickerOpen] = useState(false)
 
   // Sync blocks from database to local state
   useEffect(() => {
@@ -1395,15 +1401,23 @@ export default function WritiEditor({
             />
           )}
 
+          {/* Page Cover Display */}
+          {currentPage?.coverImage && (
+            <PageCoverDisplay
+              cover={JSON.parse(currentPage.coverImage) as PageCover}
+              onChangeCover={() => setIsCoverPickerOpen(true)}
+              onRemoveCover={() => onUpdatePage({ coverImage: null })}
+            />
+          )}
+
           {/* Notion-style Page Header - Left Aligned */}
-          <div className="mt-8 flex flex-col pl-8">
+          <div
+            className={`${currentPage?.coverImage ? "mt-4" : "mt-8"} flex flex-col pl-8`}
+          >
             {/* Page Title with Floating Actions */}
             <SafeFloatingHeader
               onAddIcon={() => setIsIconPickerOpen(true)}
-              onAddCover={() => {
-                // TODO: Implement cover image upload
-                console.log("Add cover")
-              }}
+              onAddCover={() => setIsCoverPickerOpen(true)}
               onAddComment={() => {
                 setShowCommentInput(!showCommentInput)
                 setCommentUserInteracted(true)
@@ -1628,6 +1642,25 @@ export default function WritiEditor({
         onIconRemove={() => {
           onUpdatePage({ emoji: null, icon: null })
           setIsIconPickerOpen(false)
+        }}
+      />
+
+      {/* Cover Picker for Add Cover functionality */}
+      <CoverPicker
+        isOpen={isCoverPickerOpen}
+        onClose={() => setIsCoverPickerOpen(false)}
+        currentCover={
+          currentPage?.coverImage
+            ? (JSON.parse(currentPage.coverImage) as PageCover)
+            : undefined
+        }
+        onCoverSelect={cover => {
+          onUpdatePage({ coverImage: JSON.stringify(cover) })
+          setIsCoverPickerOpen(false)
+        }}
+        onCoverRemove={() => {
+          onUpdatePage({ coverImage: null })
+          setIsCoverPickerOpen(false)
         }}
       />
     </div>

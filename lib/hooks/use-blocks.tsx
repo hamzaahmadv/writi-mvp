@@ -68,9 +68,23 @@ export function useBlocks(
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Check if pageId is a valid UUID
+  const isValidUUID = (id: string): boolean => {
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    return uuidRegex.test(id)
+  }
+
   // Load blocks for the current page
   const loadBlocks = async () => {
     if (!userId || !pageId) {
+      setBlocks([])
+      setIsLoading(false)
+      return
+    }
+
+    // Skip loading if pageId is not a valid UUID (e.g., "loading-page")
+    if (!isValidUUID(pageId)) {
       setBlocks([])
       setIsLoading(false)
       return
@@ -103,7 +117,7 @@ export function useBlocks(
     afterId?: string,
     type: BlockType = "paragraph"
   ): Promise<string | null> => {
-    if (!userId || !pageId) return null
+    if (!userId || !pageId || !isValidUUID(pageId)) return null
 
     // Generate temporary ID for optimistic update
     const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -182,8 +196,8 @@ export function useBlocks(
       prev.map(block => (block.id === id ? { ...block, ...updates } : block))
     )
 
-    // Skip database update for temp blocks
-    if (id.startsWith("temp_")) return
+    // Skip database update for temp blocks or invalid pageId
+    if (id.startsWith("temp_") || !pageId || !isValidUUID(pageId)) return
 
     try {
       const result = await updateBlockAction(id, {
@@ -215,8 +229,8 @@ export function useBlocks(
     // Optimistic update
     setBlocks(prev => prev.filter(block => block.id !== id))
 
-    // Skip database update for temp blocks
-    if (id.startsWith("temp_")) return
+    // Skip database update for temp blocks or invalid pageId
+    if (id.startsWith("temp_") || !pageId || !isValidUUID(pageId)) return
 
     try {
       const result = await deleteBlockAction(id)
@@ -251,6 +265,9 @@ export function useBlocks(
     const insertIndex = position === "before" ? hoverIndex : hoverIndex + 1
     newBlocks.splice(insertIndex, 0, draggedBlock)
     setBlocks(newBlocks)
+
+    // Skip database update for invalid pageId
+    if (!pageId || !isValidUUID(pageId)) return
 
     try {
       // Update order in database

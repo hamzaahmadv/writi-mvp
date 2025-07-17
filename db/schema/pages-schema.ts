@@ -12,6 +12,7 @@ export const pagesTable = pgTable("pages", {
   title: text("title").notNull().default("New Page"),
   emoji: text("emoji"),
   icon: text("icon"), // JSON string for { type: 'icon', name: string, color?: string }
+  coverImage: text("cover_image"), // JSON string for { type: 'gradient' | 'image' | 'unsplash', value: string, position?: number }
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

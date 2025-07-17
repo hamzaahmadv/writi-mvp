@@ -211,6 +211,8 @@ export default function DashboardPage() {
         id: "loading-page",
         title: "Welcome to Writi",
         emoji: null,
+        icon: null,
+        coverImage: null,
         userId,
         createdAt: new Date(),
         updatedAt: new Date()
