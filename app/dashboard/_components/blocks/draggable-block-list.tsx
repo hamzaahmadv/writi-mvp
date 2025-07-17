@@ -446,7 +446,7 @@ export function DraggableBlockList({
           {/* Selection rectangle overlay during dragging */}
           {isSelecting && selectionStart && selectionEnd && (
             <div
-              className="pointer-events-none absolute z-50 rounded-sm border-2 border-blue-500 bg-blue-200/30"
+              className="pointer-events-none absolute z-50 rounded-sm border-2 border-transparent"
               style={{
                 left: Math.min(selectionStart.x, selectionEnd.x),
                 top: Math.min(selectionStart.y, selectionEnd.y),
@@ -461,7 +461,7 @@ export function DraggableBlockList({
             const selectionBounds = getSelectionBounds()
             return selectionBounds && !isSelecting ? (
               <div
-                className="pointer-events-none absolute z-10 rounded-md bg-blue-100"
+                className="pointer-events-none absolute z-10 rounded-md border-2 border-transparent"
                 style={{
                   left: selectionBounds.left,
                   top: selectionBounds.top,

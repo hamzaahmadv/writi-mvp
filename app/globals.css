@@ -194,16 +194,6 @@ Global styles for the app.
   outline: none;
 }
 
-/* Improve focus styles for block elements */
-.block-focused {
-  background-color: rgba(59, 130, 246, 0.05);
-  border-radius: 4px;
-}
-
-.block-selected {
-  background-color: rgba(59, 130, 246, 0.1);
-  border-radius: 4px;
-}
 
 /* Toggle block styles */
 .toggle-content {

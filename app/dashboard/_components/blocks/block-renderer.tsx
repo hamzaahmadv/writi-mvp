@@ -678,10 +678,7 @@ export function BlockRenderer({
       transition={{ duration: 0, ease: "easeOut" }}
       className={`
         group relative py-1 transition-all duration-150
-        ${isFocused && !isSelected ? "bg-blue-50/30 ring-1 ring-blue-200/50" : ""}
-        ${isSelected ? "bg-blue-100/70 shadow-sm ring-2 ring-blue-300" : "hover:bg-gray-50/50"}
         ${isDragging ? "z-50 shadow-lg" : ""}
-        ${isSelected && isFocused ? "ring-blue-400" : ""}
       `}
       style={{
         marginLeft: level > 0 ? `${level * 24}px` : undefined,
