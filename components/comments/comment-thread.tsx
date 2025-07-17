@@ -104,7 +104,7 @@ function CommentItem({
             <Check className="size-3" />
           ) : (
             <span className="text-xs font-semibold">
-              {user?.firstName?.[0] || "U"}
+              {user?.firstName?.[0]?.toUpperCase() || "U"}
             </span>
           )}
         </div>

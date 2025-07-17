@@ -53,7 +53,7 @@ export function CommentsSection({
     <div
       className={cn(
         "flex flex-col transition-all duration-300 ease-in-out",
-        hasComments ? "gap-3" : "",
+        hasComments ? "gap-2" : "",
         className
       )}
     >
@@ -61,9 +61,9 @@ export function CommentsSection({
       {hasComments && (
         <div
           ref={scrollContainerRef}
-          className="animate-in fade-in-50 max-h-[300px] overflow-y-auto rounded-lg border border-gray-100 bg-gray-50/50 p-3 duration-300"
+          className="animate-in fade-in-50 max-h-[300px] overflow-y-auto duration-300"
         >
-          <div className="space-y-2">
+          <div className="space-y-1">
             {comments.map((comment, index) => (
               <div
                 key={comment.id}
@@ -99,7 +99,7 @@ export function CommentsSection({
       {isLoading && comments.length === 0 && (
         <div className="animate-in fade-in-50 space-y-3 duration-300">
           {/* Comments Loading Skeleton */}
-          <div className="rounded-lg border border-gray-100 bg-gray-50/30 p-3">
+          <div className="p-3">
             <div className="space-y-3">
               {[...Array(2)].map((_, index) => (
                 <div key={index} className="flex gap-3 py-2">
@@ -119,7 +119,7 @@ export function CommentsSection({
 
           {/* Comment Input Loading Skeleton */}
           <div className="animate-in fade-in-50 slide-in-from-top-2 duration-300">
-            <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white p-3">
+            <div className="flex items-center gap-3 p-3">
               <div className="size-8 animate-pulse rounded-full bg-gray-200"></div>
               <div className="flex-1">
                 <div className="h-5 w-32 animate-pulse rounded bg-gray-200"></div>

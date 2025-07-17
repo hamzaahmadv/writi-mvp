@@ -115,10 +115,8 @@ export function HorizontalCommentInput({
     <div className={cn("transition-all duration-200 ease-in-out", className)}>
       <div
         className={cn(
-          "flex items-center gap-3 rounded-lg transition-all duration-200",
-          isExpanded
-            ? "border border-gray-200 bg-white p-3 shadow-sm"
-            : "p-2 hover:bg-gray-50/50",
+          "flex items-start gap-3 rounded-lg transition-all duration-200",
+          "py-2",
           "group"
         )}
       >
@@ -127,11 +125,11 @@ export function HorizontalCommentInput({
           <div
             className={cn(
               "flex items-center justify-center rounded-full font-medium text-white transition-all duration-200",
-              "size-8 text-sm",
+              "size-7 text-xs",
               hasComments ? "bg-gray-500" : "bg-gray-400"
             )}
           >
-            <span>{user?.firstName?.[0] || "H"}</span>
+            <span>{user?.firstName?.[0]?.toUpperCase() || "H"}</span>
           </div>
         </div>
 
@@ -147,7 +145,7 @@ export function HorizontalCommentInput({
             placeholder="Add a comment..."
             rows={1}
             className={cn(
-              "max-h-[120px] min-h-[20px] w-full resize-none overflow-y-auto border-none bg-transparent text-sm outline-none transition-all duration-200 placeholder:text-gray-400 focus:placeholder:text-gray-300",
+              "max-h-[120px] min-h-[20px] w-full resize-none overflow-y-auto border-none bg-transparent text-xs outline-none transition-all duration-200 placeholder:text-gray-400 focus:placeholder:text-gray-300",
               isExpanded ? "text-gray-900" : "text-gray-600"
             )}
             style={{ lineHeight: "20px" }}

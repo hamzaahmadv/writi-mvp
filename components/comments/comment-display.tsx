@@ -62,8 +62,8 @@ export const CommentDisplay = memo(function CommentDisplay({
   return (
     <div
       className={cn(
-        "group flex gap-3 py-2 transition-all duration-200 ease-in-out",
-        comment.resolved ? "opacity-60" : "hover:bg-gray-50/30",
+        "group flex items-start gap-3 py-2 transition-all duration-200 ease-in-out",
+        comment.resolved ? "opacity-60" : "",
         className
       )}
     >
@@ -72,11 +72,11 @@ export const CommentDisplay = memo(function CommentDisplay({
         <div
           className={cn(
             "flex items-center justify-center rounded-full font-medium text-white transition-all duration-200",
-            "size-8 text-sm",
+            "size-7 text-xs",
             comment.resolved ? "bg-green-500" : "bg-gray-500"
           )}
         >
-          {comment.resolved ? <Check className="size-4" /> : <span>H</span>}
+          {comment.resolved ? <Check className="size-3" /> : <span>H</span>}
         </div>
       </div>
 
@@ -118,7 +118,7 @@ export const CommentDisplay = memo(function CommentDisplay({
           </div>
         ) : (
           <div className="space-y-1">
-            <div className="flex items-center gap-2 text-sm">
+            <div className="flex items-center gap-2 text-xs">
               <span className="font-medium text-gray-900">Hamza Ahmad</span>
               <span className="text-gray-400">
                 {formatTimeAgo(new Date(comment.createdAt))}
@@ -130,7 +130,7 @@ export const CommentDisplay = memo(function CommentDisplay({
                 </span>
               )}
             </div>
-            <div className="text-sm leading-relaxed text-gray-700">
+            <div className="text-xs leading-relaxed text-gray-700">
               {comment.content}
             </div>
           </div>
