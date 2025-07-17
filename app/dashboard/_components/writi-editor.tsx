@@ -1412,7 +1412,7 @@ export default function WritiEditor({
 
           {/* Notion-style Page Header - Left Aligned */}
           <div
-            className={`${currentPage?.coverImage ? "mt-8" : "mt-8"} flex flex-col pl-8`}
+            className={`${currentPage?.coverImage ? "mt-4" : "mt-8"} flex flex-col pl-8`}
           >
             {/* Page Title with Floating Actions */}
             <SafeFloatingHeader
