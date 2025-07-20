@@ -20,6 +20,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { BlockRenderer } from "./blocks/block-renderer"
 import { DraggableBlockList } from "./blocks/draggable-block-list"
 import { SlashCommandMenu } from "./blocks/slash-command-menu"
+import VirtualBlockList from "@/components/blocks/virtual-block-list"
 import PageIcon from "./page-icon"
 import IconPicker from "./icon-picker"
 import PageCoverDisplay from "./page-cover"
@@ -46,6 +47,7 @@ interface WritiEditorProps {
   isEssential?: boolean
   onBackToDocuments?: () => void
   isPreloaded?: boolean
+  useBreadthFirstLoading?: boolean
 }
 
 export default function WritiEditor({
@@ -53,7 +55,8 @@ export default function WritiEditor({
   onUpdatePage,
   isEssential = false,
   onBackToDocuments,
-  isPreloaded = false
+  isPreloaded = false,
+  useBreadthFirstLoading = false
 }: WritiEditorProps) {
   // Authentication
   const { userId, isLoaded: userLoaded } = useCurrentUser()
@@ -1553,64 +1556,86 @@ export default function WritiEditor({
           {/* Content Area with proper spacing and alignment */}
           <div className="mt-4">
             {/* Blocks Content */}
-            <DraggableBlockList
-              blocks={currentBlocks}
-              actions={actions}
-              editorState={editorState}
-              onMoveBlock={handleMoveBlock}
-              userInteracted={userInteracted}
-            />
+            {useBreadthFirstLoading && !isEssential ? (
+              <VirtualBlockList
+                userId={userId}
+                pageId={currentPage?.id || null}
+                onBlockClick={block => {
+                  // Focus the block for editing
+                  actions.focusBlock(block.id)
+                }}
+                onBlockSelect={blockId => {
+                  actions.selectBlock(blockId)
+                }}
+                selectedBlockId={editorState.focusedBlockId || undefined}
+                enableInfiniteScroll={true}
+                estimatedBlockHeight={60}
+                className="min-h-[400px]"
+              />
+            ) : (
+              <DraggableBlockList
+                blocks={currentBlocks}
+                actions={actions}
+                editorState={editorState}
+                onMoveBlock={handleMoveBlock}
+                userInteracted={userInteracted}
+              />
+            )}
 
-            {/* Empty state */}
-            {currentBlocks.length === 0 && !currentBlocksLoading && (
-              <div className="py-16 text-center text-gray-500">
-                <div className="space-y-3">
-                  <div className="text-4xl">✍️</div>
-                  <div>
-                    <p className="text-lg font-medium text-gray-600">
-                      Start writing...
-                    </p>
-                    <p className="mt-1 text-sm text-gray-400">
-                      Press '/' for commands, or just start typing
-                    </p>
+            {/* Empty state - only for traditional mode */}
+            {!useBreadthFirstLoading &&
+              currentBlocks.length === 0 &&
+              !currentBlocksLoading && (
+                <div className="py-16 text-center text-gray-500">
+                  <div className="space-y-3">
+                    <div className="text-4xl">✍️</div>
+                    <div>
+                      <p className="text-lg font-medium text-gray-600">
+                        Start writing...
+                      </p>
+                      <p className="mt-1 text-sm text-gray-400">
+                        Press '/' for commands, or just start typing
+                      </p>
+                    </div>
                   </div>
+                </div>
+              )}
+
+            {/* Add new block area - only for traditional mode */}
+            {!useBreadthFirstLoading && (
+              <div
+                className="group cursor-text py-4"
+                onClick={() => {
+                  setUserInteracted(true)
+                  if (currentBlocks.length > 0) {
+                    actions.createBlock(
+                      currentBlocks[currentBlocks.length - 1].id,
+                      "paragraph",
+                      true // auto-focus on user interaction
+                    )
+                  } else {
+                    actions.createBlock(undefined, "paragraph", true)
+                  }
+                }}
+              >
+                <div className="flex items-center text-gray-400 opacity-0 transition-opacity group-hover:opacity-100">
+                  <svg
+                    className="mr-2 size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  <span className="text-sm">Add a block</span>
                 </div>
               </div>
             )}
-
-            {/* Add new block area */}
-            <div
-              className="group cursor-text py-4"
-              onClick={() => {
-                setUserInteracted(true)
-                if (currentBlocks.length > 0) {
-                  actions.createBlock(
-                    currentBlocks[currentBlocks.length - 1].id,
-                    "paragraph",
-                    true // auto-focus on user interaction
-                  )
-                } else {
-                  actions.createBlock(undefined, "paragraph", true)
-                }
-              }}
-            >
-              <div className="flex items-center text-gray-400 opacity-0 transition-opacity group-hover:opacity-100">
-                <svg
-                  className="mr-2 size-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                <span className="text-sm">Add a block</span>
-              </div>
-            </div>
           </div>
         </div>
       </div>
