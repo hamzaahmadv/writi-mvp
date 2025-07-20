@@ -4,7 +4,7 @@ import {
   getTabCoordinationClient,
   type TabCoordinationClient
 } from "./tab-coordination-client"
-import type { Block } from "./sqlite-worker"
+import type { Block, SyncState } from "./sqlite-worker"
 import type { DBOperation, SyncEvent } from "./shared-worker-types"
 import { TabCoordinationError } from "./shared-worker-types"
 
@@ -338,6 +338,55 @@ export class CoordinatedSQLiteClient {
         console.error("Error in sync event listener:", error)
       }
     })
+  }
+
+  // Phase 5: Realtime sync methods
+  async applyRealtimeChange(
+    eventType: "INSERT" | "UPDATE" | "DELETE",
+    block: Block | null,
+    blockId?: string
+  ): Promise<void> {
+    await this.ensureInitialized()
+
+    // Apply change to local SQLite
+    await this.sqliteClient.applyRealtimeChange(eventType, block, blockId)
+
+    // If we have coordination, broadcast the change
+    if (this.coordinationClient) {
+      const syncEvent: SyncEvent = {
+        type:
+          eventType === "DELETE"
+            ? "block-delete"
+            : eventType === "INSERT"
+              ? "block-create"
+              : "block-update",
+        pageId: block?.page_id || "",
+        blockId: blockId || block?.id || "",
+        data: block,
+        timestamp: Date.now(),
+        userId: block?.last_edited_by || "system"
+      }
+
+      await this.broadcastSyncEvent(syncEvent)
+    }
+  }
+
+  async getModifiedBlocksSince(
+    pageId: string,
+    timestamp: number
+  ): Promise<Block[]> {
+    await this.ensureInitialized()
+    return this.sqliteClient.getModifiedBlocksSince(pageId, timestamp)
+  }
+
+  async getSyncState(): Promise<SyncState | null> {
+    await this.ensureInitialized()
+    return this.sqliteClient.getSyncState()
+  }
+
+  async updateSyncState(updates: Partial<SyncState>): Promise<void> {
+    await this.ensureInitialized()
+    await this.sqliteClient.updateSyncState(updates)
   }
 }
 

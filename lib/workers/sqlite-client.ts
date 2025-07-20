@@ -1,5 +1,5 @@
 import * as Comlink from "comlink"
-import type { SQLiteWorkerAPI, Block } from "./sqlite-worker"
+import type { SQLiteWorkerAPI, Block, SyncState } from "./sqlite-worker"
 
 class SQLiteClient {
   private worker: Worker | null = null
@@ -151,6 +151,62 @@ class SQLiteClient {
     }
 
     return await this.api.getBlockCount(pageId, parentId)
+  }
+
+  // Phase 5: Realtime sync methods
+  async applyRealtimeChange(
+    eventType: "INSERT" | "UPDATE" | "DELETE",
+    block: Block | null,
+    blockId?: string
+  ): Promise<void> {
+    if (!this.isInitialized || !this.api) {
+      await this.initialize()
+    }
+
+    if (!this.api) {
+      throw new Error("SQLite API not available")
+    }
+
+    return await this.api.applyRealtimeChange(eventType, block, blockId)
+  }
+
+  async getModifiedBlocksSince(
+    pageId: string,
+    timestamp: number
+  ): Promise<Block[]> {
+    if (!this.isInitialized || !this.api) {
+      await this.initialize()
+    }
+
+    if (!this.api) {
+      throw new Error("SQLite API not available")
+    }
+
+    return await this.api.getModifiedBlocksSince(pageId, timestamp)
+  }
+
+  async getSyncState(): Promise<SyncState | null> {
+    if (!this.isInitialized || !this.api) {
+      await this.initialize()
+    }
+
+    if (!this.api) {
+      throw new Error("SQLite API not available")
+    }
+
+    return await this.api.getSyncState()
+  }
+
+  async updateSyncState(updates: Partial<SyncState>): Promise<void> {
+    if (!this.isInitialized || !this.api) {
+      await this.initialize()
+    }
+
+    if (!this.api) {
+      throw new Error("SQLite API not available")
+    }
+
+    return await this.api.updateSyncState(updates)
   }
 
   async close(): Promise<void> {

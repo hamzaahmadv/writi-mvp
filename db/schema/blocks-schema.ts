@@ -41,6 +41,7 @@ export const blocksTable = pgTable("blocks", {
   content: text("content").notNull().default(""),
   properties: jsonb("properties").notNull().default({}),
   order: integer("order").notNull(),
+  last_edited_by: text("last_edited_by"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

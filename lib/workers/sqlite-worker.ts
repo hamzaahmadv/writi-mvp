@@ -10,7 +10,7 @@ import type {
 } from "./transaction-types"
 
 // Types for our block data structure
-interface Block {
+export interface Block {
   id: string
   type: string
   properties: Record<string, any>
@@ -18,6 +18,7 @@ interface Block {
   parent: string | null
   created_time: number
   last_edited_time: number
+  last_edited_by?: string
   page_id: string
 }
 
@@ -29,6 +30,7 @@ interface BlockInsert {
   parent: string | null
   created_time: number
   last_edited_time: number
+  last_edited_by?: string
   page_id: string
 }
 
@@ -103,6 +105,7 @@ class SQLiteDB {
         parent TEXT,
         created_time INTEGER NOT NULL,
         last_edited_time INTEGER NOT NULL,
+        last_edited_by TEXT,
         page_id TEXT NOT NULL,
         FOREIGN KEY (parent) REFERENCES blocks (id) ON DELETE CASCADE
       );
@@ -170,7 +173,7 @@ class SQLiteDB {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT id, type, properties, content, parent, created_time, last_edited_time, page_id
+        SELECT id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id
         FROM blocks 
         WHERE page_id = ? 
         ORDER BY created_time ASC
@@ -195,6 +198,7 @@ class SQLiteDB {
         parent: row.parent,
         created_time: row.created_time,
         last_edited_time: row.last_edited_time,
+        last_edited_by: row.last_edited_by,
         page_id: row.page_id
       }))
 
@@ -214,8 +218,8 @@ class SQLiteDB {
     try {
       const stmt = this.db.prepare(`
         INSERT OR REPLACE INTO blocks 
-        (id, type, properties, content, parent, created_time, last_edited_time, page_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
 
       const propertiesJson = JSON.stringify(block.properties)
@@ -229,6 +233,7 @@ class SQLiteDB {
         block.parent,
         block.created_time,
         block.last_edited_time,
+        block.last_edited_by || null,
         block.page_id
       ])
 
@@ -267,7 +272,7 @@ class SQLiteDB {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT id, type, properties, content, parent, created_time, last_edited_time, page_id
+        SELECT id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id
         FROM blocks 
         WHERE id = ?
       `)
@@ -286,6 +291,7 @@ class SQLiteDB {
           parent: row.parent,
           created_time: row.created_time,
           last_edited_time: row.last_edited_time,
+          last_edited_by: row.last_edited_by,
           page_id: row.page_id
         }
       }
@@ -329,7 +335,7 @@ class SQLiteDB {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT id, type, properties, content, parent, created_time, last_edited_time, page_id
+        SELECT id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id
         FROM blocks 
         WHERE page_id = ? 
         ORDER BY created_time ASC
@@ -354,6 +360,7 @@ class SQLiteDB {
         parent: row.parent,
         created_time: row.created_time,
         last_edited_time: row.last_edited_time,
+        last_edited_by: row.last_edited_by,
         page_id: row.page_id
       }))
 
@@ -378,7 +385,7 @@ class SQLiteDB {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT id, type, properties, content, parent, created_time, last_edited_time, page_id
+        SELECT id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id
         FROM blocks 
         WHERE page_id = ? AND parent IS NULL
         ORDER BY created_time ASC
@@ -403,6 +410,7 @@ class SQLiteDB {
         parent: row.parent,
         created_time: row.created_time,
         last_edited_time: row.last_edited_time,
+        last_edited_by: row.last_edited_by,
         page_id: row.page_id
       }))
 
@@ -425,7 +433,7 @@ class SQLiteDB {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT id, type, properties, content, parent, created_time, last_edited_time, page_id
+        SELECT id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id
         FROM blocks 
         WHERE parent = ?
         ORDER BY created_time ASC
@@ -450,6 +458,7 @@ class SQLiteDB {
         parent: row.parent,
         created_time: row.created_time,
         last_edited_time: row.last_edited_time,
+        last_edited_by: row.last_edited_by,
         page_id: row.page_id
       }))
 
@@ -930,6 +939,105 @@ class SQLiteDB {
       console.error("Error updating failed count:", error)
     }
   }
+
+  // Phase 5: Realtime sync support
+  async applyRealtimeChange(
+    eventType: "INSERT" | "UPDATE" | "DELETE",
+    block: Block | null,
+    blockId?: string
+  ): Promise<void> {
+    if (!this.isInitialized) {
+      await this.initialize()
+    }
+
+    try {
+      switch (eventType) {
+        case "INSERT":
+        case "UPDATE":
+          if (!block) {
+            throw new Error(`Block data required for ${eventType} operation`)
+          }
+
+          // For updates, check if we have a newer version locally
+          if (eventType === "UPDATE") {
+            const existingBlock = await this.getBlock(block.id)
+            if (
+              existingBlock &&
+              existingBlock.last_edited_time > block.last_edited_time
+            ) {
+              console.log(
+                `Skipping update for block ${block.id} - local version is newer`
+              )
+              return
+            }
+          }
+
+          await this.upsertBlock(block)
+          console.log(`Applied realtime ${eventType} for block ${block.id}`)
+          break
+
+        case "DELETE":
+          if (!blockId) {
+            throw new Error("Block ID required for DELETE operation")
+          }
+          await this.deleteBlock(blockId)
+          console.log(`Applied realtime DELETE for block ${blockId}`)
+          break
+
+        default:
+          throw new Error(`Unknown event type: ${eventType}`)
+      }
+    } catch (error) {
+      console.error(`Error applying realtime change (${eventType}):`, error)
+      throw error
+    }
+  }
+
+  // Get blocks that have been modified since a given timestamp
+  async getModifiedBlocksSince(
+    pageId: string,
+    timestamp: number
+  ): Promise<Block[]> {
+    if (!this.isInitialized) {
+      await this.initialize()
+    }
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id
+        FROM blocks 
+        WHERE page_id = ? AND last_edited_time > ?
+        ORDER BY last_edited_time ASC
+      `)
+
+      const rows: BlockInsert[] = []
+      stmt.bind([pageId, timestamp])
+
+      while (stmt.step()) {
+        const row = stmt.get({}) as BlockInsert
+        rows.push(row)
+      }
+
+      stmt.finalize()
+
+      const blocks: Block[] = rows.map(row => ({
+        id: row.id,
+        type: row.type,
+        properties: JSON.parse(row.properties),
+        content: JSON.parse(row.content),
+        parent: row.parent,
+        created_time: row.created_time,
+        last_edited_time: row.last_edited_time,
+        last_edited_by: row.last_edited_by,
+        page_id: row.page_id
+      }))
+
+      return blocks
+    } catch (error) {
+      console.error("Error getting modified blocks:", error)
+      throw error
+    }
+  }
 }
 
 // Create the worker API that will be exposed via Comlink
@@ -975,6 +1083,15 @@ const workerAPI = {
   updateSyncState: (updates: Partial<SyncState>) =>
     sqliteDB.updateSyncState(updates),
 
+  // Phase 5: Realtime sync operations
+  applyRealtimeChange: (
+    eventType: "INSERT" | "UPDATE" | "DELETE",
+    block: Block | null,
+    blockId?: string
+  ) => sqliteDB.applyRealtimeChange(eventType, block, blockId),
+  getModifiedBlocksSince: (pageId: string, timestamp: number) =>
+    sqliteDB.getModifiedBlocksSince(pageId, timestamp),
+
   close: () => sqliteDB.close()
 }
 
@@ -983,7 +1100,6 @@ Comlink.expose(workerAPI)
 
 export type SQLiteWorkerAPI = typeof workerAPI
 export type {
-  Block,
   Transaction,
   TransactionStatus,
   SyncState,
