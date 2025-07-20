@@ -141,7 +141,7 @@ Use SharedWorker + Web Locks to coordinate active tab writing to SQLite and broa
 
 Claude Prompt:
 
-Subscribe to Supabase Realtime changes for blocks. Merge updates into local SQLite and React UI.
+use the Supabase Realtime changes for blocks. Merge updates into local SQLite and React UI.
 
 
 ⸻
