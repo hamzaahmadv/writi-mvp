@@ -27,9 +27,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Core Application Pattern
-Writi is a Notion-like block-based editor with AI capabilities built on Next.js. The architecture uses a **dual storage strategy**:
+Writi is a Notion-like block-based editor with AI capabilities built on Next.js. The architecture implements a **multi-layered storage strategy** inspired by Notion's smooth editing experience:
 - **Essential Pages**: Stored in localStorage for instant access (Todo List, Getting Started)
-- **Regular Pages**: Stored in PostgreSQL with full persistence
+- **Regular Pages**: Multi-tier storage with SQLite WASM (local) + PostgreSQL (remote) + Realtime sync
 
 ### Block-Based Content System
 The editor uses a hierarchical block structure with 11 block types (headings, paragraphs, lists, callouts, code, etc.). Each block can contain children, enabling nested content with markdown shortcuts and slash commands.
@@ -44,12 +44,23 @@ All user interactions update UI immediately using temporary IDs (`temp_${timesta
 - `useBlocks` - Block CRUD with storage abstraction
 - `useCurrentUser` - Authentication state
 - `useFavorites` - Favorites with instant UI updates
+- `useTransactionQueue` - Offline-first sync queue
+- `useTabCoordination` - Multi-tab synchronization
+- `useRealtimeBlocks` - Real-time collaborative editing
+- `useBreadthFirstBlocks` - Performance-optimized block loading
 
 #### 3. Event-Driven Communication
 Uses custom DOM events (`CustomEvent("favoritesChanged")`) for cross-component communication without prop drilling.
 
 #### 4. Dual Editor Mode
 The `WritiEditor` component switches between localStorage (essential) and database (regular) storage using the same interface based on `isEssential` flag.
+
+#### 5. Advanced Performance Features (Notion-inspired)
+- **WASM SQLite with OPFS**: Client-side database for instant operations
+- **Transaction Queue**: Offline-first editing with background sync
+- **Breadth-First Loading**: Load visible blocks first, children on-demand
+- **SharedWorker Coordination**: Multi-tab consistency with leader election
+- **Realtime Sync**: Collaborative editing via Supabase Realtime
 
 ## Project Structure Details
 
@@ -100,6 +111,13 @@ All schemas follow consistent patterns:
 - Smart navigation: Enter creates blocks, Backspace on empty deletes
 - Proper IME support for international keyboards
 
+### Performance Features (New)
+- **Breadth-First Loading**: Enable with `useBreadthFirstLoading={true}` prop
+- **Offline-First Sync**: Enable with `enableOfflineFirst={true}` prop
+- **Realtime Collaboration**: Enable with `enableRealtimeSync={true}` prop
+- **Virtual Scrolling**: Automatically enabled for breadth-first loading
+- **Multi-Tab Sync**: Automatic with SharedWorker when offline-first is enabled
+
 ### Authentication & Security
 - Use `auth()` from Clerk in server components
 - Always validate user permissions before operations
@@ -119,15 +137,26 @@ All schemas follow consistent patterns:
 - **Analytics**: PostHog
 - **AI**: mem0ai
 - **Storage**: Supabase Storage
+- **Realtime**: Supabase Realtime (@supabase/supabase-js)
+- **Local DB**: SQLite WASM with OPFS (@sqlite.org/sqlite-wasm)
+- **Workers**: Web Workers + SharedWorker with Comlink
 
 ## Core Files & Utilities
 
 ### Key Entry Points
 - `app/dashboard/page.tsx` - Main dashboard with three-panel layout
-- `app/dashboard/_components/writi-editor.tsx` - Primary block editor component
+- `app/dashboard/_components/writi-editor.tsx` - Primary block editor component (now with all 5 phases integrated)
 - `lib/hooks/use-blocks.tsx` - Block CRUD operations and state management
 - `lib/hooks/use-page.tsx` - Page management with optimistic updates
 - `actions/db/` - All database operations (blocks, pages, favorites, comments)
+
+### Performance & Sync Infrastructure
+- `lib/workers/sqlite-worker.ts` - SQLite WASM database in Web Worker
+- `lib/workers/transaction-queue.ts` - Offline-first sync queue implementation
+- `lib/workers/tab-coordination-worker.ts` - SharedWorker for multi-tab sync
+- `lib/realtime/realtime-manager.ts` - Supabase Realtime integration
+- `lib/hooks/use-breadth-first-blocks.tsx` - Performance-optimized block loading
+- `components/blocks/virtual-block-list.tsx` - Virtual scrolling for large documents
 
 ### Essential Schemas
 - `db/schema/pages-schema.ts` - Page structure with icons and metadata
@@ -191,7 +220,7 @@ DATABASE_URL=
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 
-# Storage (Supabase) - Required for icon/image uploads
+# Storage & Realtime (Supabase) - Required for icon/image uploads and realtime sync
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
@@ -199,6 +228,9 @@ SUPABASE_SERVICE_ROLE_KEY=
 # Payments (Stripe) - Optional
 STRIPE_SECRET_KEY=
 NEXT_PUBLIC_STRIPE_PORTAL_LINK=
+
+# AI Memory (mem0) - Optional
+MEM0_API_KEY=
 ```
 
 ## Testing Instructions
@@ -248,14 +280,82 @@ NEXT_PUBLIC_STRIPE_PORTAL_LINK=
 - **Optimistic Updates**: UI updates immediately, then syncs to backend
 - **Event-Driven Updates**: Uses CustomEvents for cross-component communication
 - **Memory Management**: Auto-cleanup of timeouts and event listeners
+- **SQLite WASM**: Local database runs in Web Worker for non-blocking operations
+- **Transaction Queue**: Batches operations for efficient sync
+- **Virtual Scrolling**: Only renders visible blocks in viewport
+- **Breadth-First Loading**: Loads root blocks first, children on-demand
 
 ## Current Development Focus
 Based on recent commits and git status, active development areas include:
-- Comments system implementation
+- ✅ All 5 phases from Notion-inspired architecture implemented
+- ✅ SQLite WASM with OPFS for local-first editing
+- ✅ Transaction queue for offline-first sync
+- ✅ Breadth-first loading for performance
+- ✅ SharedWorker multi-tab coordination
+- ✅ Realtime sync with Supabase
+- Comments system implementation (in progress)
 - Cover image uploads and storage
 - Page header alignment improvements  
 - Icon upload functionality
 - Enhanced block actions and editor features
+
+## Architecture Implementation Status
+
+### Phase 1: WASM SQLite + OPFS ✅
+- SQLite database running in Web Worker
+- OPFS for persistent storage
+- Comlink for seamless communication
+
+### Phase 2: Transaction Queue ✅
+- Offline-first editing with background sync
+- Automatic rollback on failures
+- Network detection and retry logic
+
+### Phase 3: Breadth-First Loading ✅
+- Load visible blocks first
+- Lazy-load children on demand
+- Virtual scrolling for performance
+
+### Phase 4: Multi-Tab Coordination ✅
+- SharedWorker with leader election
+- Web Locks API for consistency
+- Automatic failover
+
+### Phase 5: Realtime Sync ✅
+- Supabase Realtime integration
+- Collaborative editing support
+- Conflict resolution
+
+## Using the New Architecture Features
+
+### Enabling Performance Features
+In `app/dashboard/page.tsx`, the WritiEditor is configured with all features enabled by default:
+
+```tsx
+<WritiEditor
+  useBreadthFirstLoading={true}  // Performance loading
+  enableRealtimeSync={true}       // Collaborative editing
+  enableOfflineFirst={true}       // Offline-first with sync queue
+/>
+```
+
+### Feature Flags
+- **useBreadthFirstLoading**: Enables virtual scrolling and lazy loading
+- **enableRealtimeSync**: Enables Supabase Realtime for collaboration
+- **enableOfflineFirst**: Enables SQLite WASM and transaction queue
+
+### Status Indicators
+The editor header now shows:
+- Online/Offline status
+- Sync progress
+- Pending transaction count
+- Leader tab indicator (for multi-tab)
+
+### Development Tips
+1. **Testing Offline**: Disconnect network to test sync queue
+2. **Multi-Tab Testing**: Open multiple tabs to test SharedWorker
+3. **Performance Testing**: Use `/test-breadth-first` with 1000+ blocks
+4. **Realtime Testing**: Use `/test-realtime` with multiple users
 
 ## Claude Code Hooks & Settings
 

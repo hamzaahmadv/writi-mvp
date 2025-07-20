@@ -296,6 +296,9 @@ export default function DashboardPage() {
                 ? preloadedEssentials.has(`essential-${selectedEssential}`)
                 : true
             }
+            useBreadthFirstLoading={true}
+            enableRealtimeSync={true}
+            enableOfflineFirst={true}
           />
         </div>
 

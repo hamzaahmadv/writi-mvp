@@ -35,10 +35,15 @@ import {
   SlashCommand,
   PageCover
 } from "@/types"
+import { cn } from "@/lib/utils"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { useBlocks } from "@/lib/hooks/use-blocks"
 import { useFavorites } from "@/lib/hooks/use-favorites"
 import { useBlockBatch } from "@/lib/hooks/use-block-batch"
+import { useTransactionQueue } from "@/lib/hooks/use-transaction-queue"
+import { useTabCoordination } from "@/lib/hooks/use-tab-coordination"
+import { useRealtimeBlocks } from "@/lib/hooks/use-realtime-blocks"
+import { useBreadthFirstBlocks } from "@/lib/hooks/use-breadth-first-blocks"
 import { SelectPage } from "@/db/schema"
 
 interface WritiEditorProps {
@@ -48,6 +53,8 @@ interface WritiEditorProps {
   onBackToDocuments?: () => void
   isPreloaded?: boolean
   useBreadthFirstLoading?: boolean
+  enableRealtimeSync?: boolean
+  enableOfflineFirst?: boolean
 }
 
 export default function WritiEditor({
@@ -56,7 +63,9 @@ export default function WritiEditor({
   isEssential = false,
   onBackToDocuments,
   isPreloaded = false,
-  useBreadthFirstLoading = false
+  useBreadthFirstLoading = false,
+  enableRealtimeSync = true,
+  enableOfflineFirst = true
 }: WritiEditorProps) {
   // Authentication
   const { userId, isLoaded: userLoaded } = useCurrentUser()
@@ -77,6 +86,43 @@ export default function WritiEditor({
       50 // Reduced batch timeout for faster block updates
     )
 
+  // Phase 2: Transaction Queue for offline-first sync
+  const {
+    enqueue: enqueueTransaction,
+    syncState,
+    queueStats
+  } = useTransactionQueue(enableOfflineFirst && !isEssential ? {} : undefined)
+
+  // Phase 4: Multi-tab coordination
+  const { isLeader, broadcastSyncEvent: broadcastSync } = useTabCoordination(
+    enableOfflineFirst && !isEssential
+      ? { autoInitialize: true }
+      : { autoInitialize: false }
+  )
+
+  // Phase 5: Realtime sync with Supabase
+  const realtimeBlocks = useRealtimeBlocks({
+    pageId: enableRealtimeSync && !isEssential ? currentPage?.id || null : null,
+    enabled: enableRealtimeSync && !isEssential
+  })
+
+  // Phase 3: Breadth-first loading for large documents
+  const breadthFirstBlocks = useBreadthFirstBlocks(
+    useBreadthFirstLoading && !isEssential ? currentPage?.id || null : null,
+    userId,
+    {
+      pageSize: 50,
+      maxDepth: 10,
+      preloadDepth: 2
+    }
+  )
+
+  // Regular blocks management (always call the hook)
+  const regularBlocks = useBlocks(
+    userId,
+    isEssential ? null : currentPage?.id || null
+  )
+
   // Blocks management - use database for regular pages, localStorage for essentials
   const {
     blocks,
@@ -86,7 +132,7 @@ export default function WritiEditor({
     updateBlock: updateBlockInDb,
     deleteBlock: deleteBlockInDb,
     moveBlock: moveBlockInDb
-  } = useBlocks(userId, isEssential ? null : currentPage?.id || null)
+  } = enableRealtimeSync && !isEssential ? realtimeBlocks : regularBlocks
 
   // Local storage for essential blocks
   const [essentialBlocks, setEssentialBlocks] = useState<Block[]>([])
@@ -558,6 +604,38 @@ export default function WritiEditor({
             ? await createEssentialBlock(afterId, type)
             : await createBlockInDb(afterId, type)
 
+          // Queue transaction for offline-first sync
+          if (
+            enableOfflineFirst &&
+            !isEssential &&
+            newBlockId &&
+            enqueueTransaction
+          ) {
+            enqueueTransaction(
+              "create_block",
+              { blockId: newBlockId, afterId, type, pageId: currentPage.id },
+              userId,
+              currentPage.id
+            )
+          }
+
+          // Broadcast sync event to other tabs
+          if (
+            enableOfflineFirst &&
+            !isEssential &&
+            newBlockId &&
+            broadcastSync
+          ) {
+            broadcastSync({
+              type: "block-create",
+              pageId: currentPage.id,
+              blockId: newBlockId,
+              data: { afterId, type },
+              timestamp: Date.now(),
+              userId: userId || ""
+            })
+          }
+
           if (newBlockId && autoFocus) {
             // Immediate synchronous state updates for instant focus
             setUserInteracted(true)
@@ -572,7 +650,16 @@ export default function WritiEditor({
           return null
         }
       },
-      [userId, currentPage, isEssential, createEssentialBlock, createBlockInDb]
+      [
+        userId,
+        currentPage,
+        isEssential,
+        createEssentialBlock,
+        createBlockInDb,
+        enableOfflineFirst,
+        enqueueTransaction,
+        broadcastSync
+      ]
     ),
 
     updateBlock: useCallback(
@@ -580,11 +667,51 @@ export default function WritiEditor({
         try {
           // Use batching for better performance
           batchUpdateBlock(id, updates)
+
+          // Queue transaction for offline-first sync
+          if (
+            enableOfflineFirst &&
+            !isEssential &&
+            enqueueTransaction &&
+            currentPage
+          ) {
+            enqueueTransaction(
+              "update_block",
+              { blockId: id, updates },
+              userId || "",
+              currentPage.id
+            )
+          }
+
+          // Broadcast sync event to other tabs
+          if (
+            enableOfflineFirst &&
+            !isEssential &&
+            broadcastSync &&
+            currentPage
+          ) {
+            broadcastSync({
+              type: "block-update",
+              pageId: currentPage.id,
+              blockId: id,
+              data: updates,
+              timestamp: Date.now(),
+              userId: userId || ""
+            })
+          }
         } catch (error) {
           console.error("Failed to update block:", error)
         }
       },
-      [batchUpdateBlock]
+      [
+        batchUpdateBlock,
+        enableOfflineFirst,
+        isEssential,
+        enqueueTransaction,
+        broadcastSync,
+        currentPage,
+        userId
+      ]
     ),
 
     deleteBlock: useCallback(
@@ -594,6 +721,38 @@ export default function WritiEditor({
             await deleteEssentialBlock(id)
           } else {
             await deleteBlockInDb(id)
+          }
+
+          // Queue transaction for offline-first sync
+          if (
+            enableOfflineFirst &&
+            !isEssential &&
+            enqueueTransaction &&
+            currentPage
+          ) {
+            enqueueTransaction(
+              "delete_block",
+              { blockId: id },
+              userId || "",
+              currentPage.id
+            )
+          }
+
+          // Broadcast sync event to other tabs
+          if (
+            enableOfflineFirst &&
+            !isEssential &&
+            broadcastSync &&
+            currentPage
+          ) {
+            broadcastSync({
+              type: "block-delete",
+              pageId: currentPage.id,
+              blockId: id,
+              data: {},
+              timestamp: Date.now(),
+              userId: userId || ""
+            })
           }
 
           // Update focus if the deleted block was focused
@@ -606,7 +765,16 @@ export default function WritiEditor({
           console.error("Failed to delete block:", error)
         }
       },
-      [isEssential, deleteEssentialBlock, deleteBlockInDb]
+      [
+        isEssential,
+        deleteEssentialBlock,
+        deleteBlockInDb,
+        enableOfflineFirst,
+        enqueueTransaction,
+        broadcastSync,
+        currentPage,
+        userId
+      ]
     ),
 
     moveBlock: useCallback(
@@ -1309,6 +1477,46 @@ export default function WritiEditor({
 
         {/* Right Section - Actions */}
         <div className="flex items-center space-x-1">
+          {/* Sync Status Indicators */}
+          {enableOfflineFirst && !isEssential && (
+            <div className="mr-3 flex items-center space-x-2">
+              {/* Offline/Online indicator */}
+              <div className="flex items-center space-x-1">
+                <div
+                  className={cn(
+                    "size-2 rounded-full",
+                    syncState?.is_online ? "bg-green-500" : "bg-gray-400"
+                  )}
+                />
+                <span className="text-xs text-gray-500">
+                  {syncState?.is_online ? "Online" : "Offline"}
+                </span>
+              </div>
+
+              {/* Sync progress */}
+              {syncState?.sync_in_progress && (
+                <div className="flex items-center space-x-1">
+                  <Loader2 className="size-3 animate-spin text-gray-400" />
+                  <span className="text-xs text-gray-500">Syncing...</span>
+                </div>
+              )}
+
+              {/* Queue stats */}
+              {queueStats && queueStats.pending_transactions > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {queueStats.pending_transactions} pending
+                </Badge>
+              )}
+
+              {/* Leader indicator for multi-tab */}
+              {isLeader && (
+                <Badge variant="outline" className="text-xs">
+                  Leader
+                </Badge>
+              )}
+            </div>
+          )}
+
           {/* Edited Badge */}
           <span className="mr-4 text-sm font-medium text-gray-500">
             {isEssential
