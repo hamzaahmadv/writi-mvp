@@ -40,10 +40,25 @@ export class TransactionQueue {
     if (this.isInitialized) return
 
     try {
+      // Check if we're in a browser environment that supports workers
+      if (typeof Worker === "undefined") {
+        console.warn("Web Workers not supported in this environment")
+        this.isInitialized = true
+        return
+      }
+
       // Create the worker
       this.worker = new Worker(new URL("./sqlite-worker.ts", import.meta.url), {
         type: "module"
       })
+
+      // Set up error handling for the worker
+      this.worker.onerror = error => {
+        console.error("TransactionQueue worker error:", error)
+        // Don't throw - continue without worker
+        this.worker = null
+        this.api = null
+      }
 
       // Wrap with Comlink
       this.api = Comlink.wrap<SQLiteWorkerAPI>(this.worker)
@@ -51,8 +66,18 @@ export class TransactionQueue {
       // Initialize the database in the worker
       await this.api.initialize()
 
+      // Check if API is available before using it
+      if (!this.api) {
+        throw new Error("Failed to initialize TransactionQueue API")
+      }
+
       // Update online status in sync state
-      await this.api.updateSyncState({ is_online: this.isOnline })
+      try {
+        await this.api.updateSyncState({ is_online: this.isOnline })
+      } catch (syncError) {
+        console.warn("Failed to update sync state:", syncError)
+        // Continue initialization even if sync state update fails
+      }
 
       // Start the sync process
       this.startSyncLoop()
@@ -327,7 +352,9 @@ export class TransactionQueue {
       this.emit({ type: "network_status_changed", is_online: true })
 
       if (this.api) {
-        this.api.updateSyncState({ is_online: true })
+        this.api.updateSyncState({ is_online: true }).catch(err => {
+          console.warn("Failed to update online sync state:", err)
+        })
         this.processQueue() // Immediately try to sync when coming online
       }
     })
@@ -338,7 +365,9 @@ export class TransactionQueue {
       this.emit({ type: "network_status_changed", is_online: false })
 
       if (this.api) {
-        this.api.updateSyncState({ is_online: false })
+        this.api.updateSyncState({ is_online: false }).catch(err => {
+          console.warn("Failed to update offline sync state:", err)
+        })
       }
     })
   }

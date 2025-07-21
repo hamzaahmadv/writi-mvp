@@ -53,6 +53,8 @@ export function useTransactionQueue(
 
   // Initialize the transaction queue
   useEffect(() => {
+    if (!config) return // Don't initialize if no config provided
+
     const initQueue = async () => {
       try {
         queueRef.current = getTransactionQueue(config)
@@ -99,9 +101,10 @@ export function useTransactionQueue(
     return () => {
       if (queueRef.current) {
         queueRef.current.close()
+        queueRef.current = null
       }
     }
-  }, [])
+  }, [config !== undefined]) // Only re-run when config existence changes
 
   const refreshStats = useCallback(async () => {
     if (!queueRef.current) return

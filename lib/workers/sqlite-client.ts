@@ -15,16 +15,40 @@ class SQLiteClient {
         type: "module"
       })
 
+      // Set up error handling for the worker
+      this.worker.onerror = error => {
+        console.error("SQLite worker error:", error)
+      }
+
+      this.worker.onmessageerror = error => {
+        console.error("SQLite worker message error:", error)
+      }
+
       // Wrap with Comlink
       this.api = Comlink.wrap<SQLiteWorkerAPI>(this.worker)
 
-      // Initialize the database in the worker
-      await this.api.initialize()
+      // Initialize the database in the worker with timeout
+      const initTimeout = new Promise((_, reject) => {
+        setTimeout(
+          () => reject(new Error("SQLite initialization timeout")),
+          10000
+        )
+      })
+
+      await Promise.race([this.api.initialize(), initTimeout])
 
       this.isInitialized = true
       console.log("SQLite client initialized successfully")
     } catch (error) {
       console.error("Failed to initialize SQLite client:", error)
+
+      // Clean up on failure
+      if (this.worker) {
+        this.worker.terminate()
+        this.worker = null
+      }
+      this.api = null
+
       throw error
     }
   }

@@ -100,9 +100,26 @@ export function useRealtimeBlocks(
         const client = getCoordinatedSQLiteClient()
         await client.initialize()
         sqliteClientRef.current = client
+        console.log("SQLite client initialized successfully")
       } catch (err) {
         console.error("Failed to initialize SQLite:", err)
-        setError("Failed to initialize local database")
+
+        // Provide more specific error messages
+        if (err instanceof Error) {
+          if (err.message.includes("timeout")) {
+            setError(
+              "Database initialization timed out. Please refresh the page."
+            )
+          } else if (err.message.includes("OPFS")) {
+            setError("Local storage not available. Using temporary storage.")
+            // Don't treat OPFS failure as fatal since we fall back to memory
+            return
+          } else {
+            setError(`Database error: ${err.message}`)
+          }
+        } else {
+          setError("Failed to initialize local database")
+        }
       }
     }
 

@@ -108,8 +108,8 @@ export default function WritiEditor({
 
   // Phase 3: Breadth-first loading for large documents
   const breadthFirstBlocks = useBreadthFirstBlocks(
-    useBreadthFirstLoading && !isEssential ? currentPage?.id || null : null,
     userId,
+    useBreadthFirstLoading && !isEssential ? currentPage?.id || null : null,
     {
       pageSize: 50,
       maxDepth: 10,

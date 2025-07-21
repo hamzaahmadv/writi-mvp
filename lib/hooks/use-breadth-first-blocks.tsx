@@ -1,13 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { getSQLiteClient } from "@/lib/workers/sqlite-client"
-import { getTransactionQueue } from "@/lib/workers/transaction-queue"
 import {
   getRootBlocksAction,
   getChildBlocksAction,
-  getBlockCountAction,
-  type BlockWithChildren
+  getBlockCountAction
 } from "@/actions/db/blocks-actions"
 import {
   buildBlockHierarchy,
@@ -70,7 +68,17 @@ export function useBreadthFirstBlocks(
   pageId: string | null,
   config: Partial<BreadthFirstBlocksConfig> = {}
 ): UseBreadthFirstBlocksResult {
-  const fullConfig = { ...DEFAULT_CONFIG, ...config }
+  // Use useMemo to memoize config to prevent infinite re-renders
+  const fullConfig = React.useMemo(
+    () => ({ ...DEFAULT_CONFIG, ...config }),
+    [
+      config.pageSize,
+      config.enableVirtualScrolling,
+      config.maxDepth,
+      config.preloadDepth,
+      config.enableOfflineSync
+    ]
+  )
 
   const [blocks, setBlocks] = useState<HierarchicalBlock[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -86,8 +94,41 @@ export function useBreadthFirstBlocks(
   })
 
   const offsetRef = useRef(0)
-  const sqliteClient = useRef(getSQLiteClient())
-  const transactionQueue = useRef(getTransactionQueue())
+  const sqliteClientRef = useRef<ReturnType<typeof getSQLiteClient> | null>(
+    null
+  )
+  const isInitializedRef = useRef(false)
+
+  // Initialize SQLite client
+  useEffect(() => {
+    if (!fullConfig.enableOfflineSync || isInitializedRef.current) return
+
+    const initClient = async () => {
+      try {
+        const client = getSQLiteClient()
+        await client.initialize()
+        sqliteClientRef.current = client
+        isInitializedRef.current = true
+        console.log("SQLite client initialized in useBreadthFirstBlocks")
+      } catch (err) {
+        console.warn(
+          "SQLite initialization failed in useBreadthFirstBlocks:",
+          err
+        )
+        // Don't treat as fatal - continue without offline sync
+      }
+    }
+
+    initClient()
+
+    return () => {
+      if (sqliteClientRef.current) {
+        sqliteClientRef.current.close()
+        sqliteClientRef.current = null
+        isInitializedRef.current = false
+      }
+    }
+  }, [fullConfig.enableOfflineSync])
 
   // Get visible blocks (only expanded ones)
   const visibleBlocks = flattenHierarchy(blocks, false)
@@ -96,15 +137,26 @@ export function useBreadthFirstBlocks(
   const loadInitialBlocks = useCallback(async () => {
     if (!userId || !pageId) return
 
+    if (!pageId) {
+      console.log("No pageId provided, skipping block load")
+      setBlocks([])
+      setIsLoading(false)
+      return
+    }
+
     setIsLoading(true)
     setError(null)
     const startTime = Date.now()
 
     try {
       // Load from local SQLite first for immediate response
-      if (fullConfig.enableOfflineSync) {
+      if (
+        fullConfig.enableOfflineSync &&
+        sqliteClientRef.current &&
+        isInitializedRef.current
+      ) {
         try {
-          const localBlocks = await sqliteClient.current.getRootBlocks(
+          const localBlocks = await sqliteClientRef.current.getRootBlocks(
             pageId,
             fullConfig.pageSize,
             0
@@ -131,19 +183,24 @@ export function useBreadthFirstBlocks(
 
       // Load from server for latest data
       const [rootBlocksResult, countResult] = await Promise.all([
-        getRootBlocksAction(pageId, userId, fullConfig.pageSize, 0),
-        getBlockCountAction(pageId, userId, undefined) // undefined parentId for root blocks
+        getRootBlocksAction(pageId, userId!, fullConfig.pageSize, 0),
+        getBlockCountAction(pageId, userId!, undefined) // undefined parentId for root blocks
       ])
 
       if (!rootBlocksResult.isSuccess) {
-        throw new Error(rootBlocksResult.message)
+        // Don't throw error for empty results, just log
+        console.warn("Failed to load root blocks:", rootBlocksResult.message)
+        setBlocks([])
+        setLoadedCount(0)
+        setHasNextPage(false)
+        return
       }
 
       if (countResult.isSuccess) {
         setTotalCount(countResult.data)
       }
 
-      const flatBlocks = rootBlocksResult.data.map(dbBlockToEditorBlock)
+      const flatBlocks = (rootBlocksResult.data || []).map(dbBlockToEditorBlock)
       const hierarchicalBlocks = buildBlockHierarchy(
         flatBlocks,
         fullConfig.maxDepth
@@ -155,10 +212,14 @@ export function useBreadthFirstBlocks(
       offsetRef.current = fullConfig.pageSize
 
       // Sync to local SQLite for offline access
-      if (fullConfig.enableOfflineSync) {
+      if (
+        fullConfig.enableOfflineSync &&
+        sqliteClientRef.current &&
+        isInitializedRef.current
+      ) {
         try {
           for (const block of flatBlocks) {
-            await sqliteClient.current.upsertBlock({
+            await sqliteClientRef.current.upsertBlock({
               id: block.id,
               type: block.type,
               properties: block.props || {},
@@ -233,18 +294,26 @@ export function useBreadthFirstBlocks(
       offsetRef.current += fullConfig.pageSize
 
       // Sync new blocks to local storage
-      if (fullConfig.enableOfflineSync) {
-        for (const block of newFlatBlocks) {
-          await sqliteClient.current.upsertBlock({
-            id: block.id,
-            type: block.type,
-            properties: block.props || {},
-            content: [block.content],
-            parent: block.parentId || null,
-            created_time: Date.now(),
-            last_edited_time: Date.now(),
-            page_id: pageId!
-          })
+      if (
+        fullConfig.enableOfflineSync &&
+        sqliteClientRef.current &&
+        isInitializedRef.current
+      ) {
+        try {
+          for (const block of newFlatBlocks) {
+            await sqliteClientRef.current.upsertBlock({
+              id: block.id,
+              type: block.type,
+              properties: block.props || {},
+              content: [block.content],
+              parent: block.parentId || null,
+              created_time: Date.now(),
+              last_edited_time: Date.now(),
+              page_id: pageId!
+            })
+          }
+        } catch (syncError) {
+          console.warn("Failed to sync new blocks to local storage:", syncError)
         }
       }
     } catch (err) {
@@ -340,18 +409,29 @@ export function useBreadthFirstBlocks(
         )
 
         // Sync children to local storage
-        if (fullConfig.enableOfflineSync) {
-          for (const child of childFlatBlocks) {
-            await sqliteClient.current.upsertBlock({
-              id: child.id,
-              type: child.type,
-              properties: child.props || {},
-              content: [child.content],
-              parent: child.parentId || null,
-              created_time: Date.now(),
-              last_edited_time: Date.now(),
-              page_id: pageId!!
-            })
+        if (
+          fullConfig.enableOfflineSync &&
+          sqliteClientRef.current &&
+          isInitializedRef.current
+        ) {
+          try {
+            for (const child of childFlatBlocks) {
+              await sqliteClientRef.current.upsertBlock({
+                id: child.id,
+                type: child.type,
+                properties: child.props || {},
+                content: [child.content],
+                parent: child.parentId || null,
+                created_time: Date.now(),
+                last_edited_time: Date.now(),
+                page_id: pageId!!
+              })
+            }
+          } catch (syncError) {
+            console.warn(
+              "Failed to sync child blocks to local storage:",
+              syncError
+            )
           }
         }
       } catch (err) {
@@ -403,7 +483,7 @@ export function useBreadthFirstBlocks(
   // Load initial blocks when dependencies change
   useEffect(() => {
     loadInitialBlocks()
-  }, [loadInitialBlocks])
+  }, [userId, pageId]) // Only re-run when userId or pageId changes
 
   return {
     blocks,

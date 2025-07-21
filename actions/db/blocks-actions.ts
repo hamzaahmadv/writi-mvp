@@ -147,6 +147,13 @@ export async function getRootBlocksAction(
   offset: number = 0
 ): Promise<ActionState<SelectBlock[]>> {
   try {
+    if (!pageId || !userId) {
+      return {
+        isSuccess: false,
+        message: "Missing required parameters: pageId or userId"
+      }
+    }
+
     const blocks = await db.query.blocks.findMany({
       where: and(
         eq(blocksTable.pageId, pageId),
@@ -157,14 +164,19 @@ export async function getRootBlocksAction(
       limit,
       offset
     })
+    
+    // Return success even if no blocks found
     return {
       isSuccess: true,
       message: "Root blocks retrieved successfully",
-      data: blocks
+      data: blocks || []
     }
   } catch (error) {
     console.error("Error getting root blocks:", error)
-    return { isSuccess: false, message: "Failed to get root blocks" }
+    return { 
+      isSuccess: false, 
+      message: `Failed to get root blocks: ${error instanceof Error ? error.message : 'Unknown error'}` 
+    }
   }
 }
 

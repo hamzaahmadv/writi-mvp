@@ -30,6 +30,34 @@ const nextConfig = {
             value: 'same-origin'
           }
         ]
+      },
+      {
+        // Headers for SQLite WASM worker
+        source: '/_next/static/chunks/(.*)worker(.*).js',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/javascript'
+          }
+        ]
+      },
+      {
+        // Headers for WASM modules
+        source: '/(.*).wasm',
+        headers: [
+          {
+            key: 'Content-Type',
+            value: 'application/wasm'
+          },
+          {
+            key: 'Cross-Origin-Embedder-Policy',
+            value: 'require-corp'
+          },
+          {
+            key: 'Cross-Origin-Resource-Policy',
+            value: 'cross-origin'
+          }
+        ]
       }
     ];
   },

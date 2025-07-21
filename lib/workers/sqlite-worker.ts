@@ -1,5 +1,10 @@
 import * as Comlink from "comlink"
 import sqlite3InitModule from "@sqlite.org/sqlite-wasm"
+
+// Polyfill for globalThis if needed
+if (typeof globalThis === "undefined") {
+  ;(self as any).globalThis = self
+}
 import type {
   Transaction,
   TransactionInsert,
@@ -58,26 +63,58 @@ class SQLiteDB {
         printErr: (text: string) => console.error("SQLite Error:", text)
       })
 
-      console.log("SQLite WASM initialized, setting up OPFS...")
+      console.log("SQLite WASM initialized, checking storage options...")
 
-      // Check if OPFS is available
-      if (!this.sqlite3.opfs) {
-        throw new Error("OPFS not available in this environment")
+      // Try OPFS first, fall back to in-memory if not available
+      let useMemoryDb = false
+
+      // Check if we're in a secure context (required for OPFS)
+      const isSecureContext = (self as any).isSecureContext
+      if (!isSecureContext) {
+        console.warn(
+          "Not in a secure context (HTTPS/localhost required for OPFS)"
+        )
+        useMemoryDb = true
       }
 
-      // Create database with OPFS persistence
-      const opfs = this.sqlite3.opfs
-      await opfs.init()
+      // Check if OPFS is available
+      else if (this.sqlite3.opfs) {
+        try {
+          console.log("OPFS available, attempting to initialize...")
+          const opfs = this.sqlite3.opfs
+          await opfs.init()
 
-      // Create or open database file in OPFS
-      const dbName = "writi-blocks.db"
-      this.db = new this.sqlite3.oo1.OpfsDb(dbName)
+          // Create or open database file in OPFS
+          const dbName = "writi-blocks.db"
+          this.db = new this.sqlite3.oo1.OpfsDb(dbName)
+          console.log("Database opened with OPFS persistence")
+        } catch (opfsError) {
+          console.warn(
+            "OPFS initialization failed, falling back to in-memory database:",
+            opfsError
+          )
+          useMemoryDb = true
+        }
+      } else {
+        console.warn(
+          "OPFS not available in this environment, using in-memory database"
+        )
+        useMemoryDb = true
+      }
 
-      console.log("Database opened with OPFS persistence")
+      // Fall back to in-memory database if OPFS failed
+      if (useMemoryDb) {
+        this.db = new this.sqlite3.oo1.DB(":memory:", "c")
+        console.log(
+          "Using in-memory SQLite database (data will not persist across sessions)"
+        )
+      }
 
       // Set optimized settings for performance
       this.db.exec([
-        "PRAGMA journal_mode=TRUNCATE;", // Best performance with OPFS
+        useMemoryDb
+          ? "PRAGMA journal_mode=MEMORY;"
+          : "PRAGMA journal_mode=TRUNCATE;",
         "PRAGMA synchronous=NORMAL;",
         "PRAGMA cache_size=-8192;", // 8MB cache for better performance
         "PRAGMA temp_store=MEMORY;",
@@ -1094,6 +1131,17 @@ const workerAPI = {
 
   close: () => sqliteDB.close()
 }
+
+// Set up global error handling for the worker
+self.addEventListener("error", event => {
+  console.error("Worker error:", event.error)
+  event.preventDefault()
+})
+
+self.addEventListener("unhandledrejection", event => {
+  console.error("Worker unhandled rejection:", event.reason)
+  event.preventDefault()
+})
 
 // Expose the API via Comlink
 Comlink.expose(workerAPI)
