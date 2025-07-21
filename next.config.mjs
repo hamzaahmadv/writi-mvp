@@ -62,6 +62,19 @@ const nextConfig = {
     ];
   },
   webpack: (config, { isServer }) => {
+    // Enable WebAssembly experiments
+    config.experiments = {
+      ...config.experiments,
+      asyncWebAssembly: true,
+      layers: true,
+    };
+
+    // Add rule for WASM files
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: 'asset/resource',
+    });
+
     // Support for Web Workers
     if (!isServer) {
       config.resolve.fallback = {

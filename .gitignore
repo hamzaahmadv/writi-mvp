@@ -39,3 +39,6 @@ next-env.d.ts
 /.clerk/
 
 .mcp.json
+
+# SQLite WASM files (generated on postinstall)
+/public/sqlite-wasm/

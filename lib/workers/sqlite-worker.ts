@@ -1,5 +1,4 @@
 import * as Comlink from "comlink"
-import sqlite3InitModule from "@sqlite.org/sqlite-wasm"
 
 // Polyfill for globalThis if needed
 if (typeof globalThis === "undefined") {
@@ -57,10 +56,21 @@ class SQLiteDB {
     try {
       console.log("Initializing SQLite WASM...")
 
-      // Initialize SQLite WASM module
+      // Dynamic import for better webpack handling
+      const sqlite3InitModule = (await import("@sqlite.org/sqlite-wasm"))
+        .default
+
+      // Initialize SQLite WASM module with custom locateFile
       this.sqlite3 = await sqlite3InitModule({
         print: (text: string) => console.log("SQLite:", text),
-        printErr: (text: string) => console.error("SQLite Error:", text)
+        printErr: (text: string) => console.error("SQLite Error:", text),
+        locateFile: (file: string) => {
+          if (file.endsWith(".wasm")) {
+            // Use the file from public directory
+            return "/sqlite-wasm/sqlite3.wasm"
+          }
+          return file
+        }
       })
 
       console.log("SQLite WASM initialized, checking storage options...")
