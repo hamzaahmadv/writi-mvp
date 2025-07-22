@@ -57,35 +57,73 @@ class SQLiteWorker {
     try {
       console.log("🚀 Phase 1: Initializing absurd-sql OPFS database...")
 
-      // Import SQL.js dynamically
-      const { default: initSqlJs } = await import("sql.js")
+      // Import SQL.js dynamically - use the @jlongster fork that supports FS
+      const { default: initSqlJs } = await import("@jlongster/sql.js")
 
-      // Initialize SQL.js with WASM
+      // Initialize SQL.js with WASM and debugging
+      console.log("🔍 Initializing SQL.js...")
       this.SQL = await initSqlJs({
         locateFile: (file: string) => {
+          let path = file
           if (file.endsWith(".wasm")) {
-            return "/sqlite-wasm/sqlite3.wasm"
+            // Use the @jlongster WASM file that supports FS operations
+            path = "/sqlite-wasm/jlongster-sql-wasm.wasm"
           }
-          return file
+          console.log(`🔍 SQL.js requesting file: ${file} -> ${path}`)
+          return path
         }
       })
+
+      // Debug SQL.js initialization
+      console.log("🔍 SQL.js object:", this.SQL)
+      console.log("🔍 SQL.js properties:", Object.keys(this.SQL || {}))
+
+      // Verify SQL.js is properly initialized
+      if (!this.SQL) {
+        throw new Error("Failed to initialize SQL.js")
+      }
+
+      // Check for FS availability with more debugging
+      if (!this.SQL.FS) {
+        console.error("❌ SQL.js FS not available")
+        console.error("❌ Available properties:", Object.keys(this.SQL))
+        throw new Error(
+          "SQL.js FS not available - make sure WASM file is loaded correctly"
+        )
+      }
+
+      console.log("✅ SQL.js initialized successfully with FS support")
+      console.log("🔍 FS object:", this.SQL.FS)
+      console.log("🔍 FS methods:", Object.keys(this.SQL.FS || {}))
 
       // Create OPFS-backed filesystem using absurd-sql
       const backend = new IndexedDBBackend()
       const sqliteFS = new SQLiteFS(this.SQL.FS, backend)
+
+      // Verify mount directory doesn't already exist
+      try {
+        this.SQL.FS.rmdir("/opfs")
+      } catch (e) {
+        // Directory doesn't exist, which is fine
+      }
+
       this.SQL.FS.mount(sqliteFS, {}, "/opfs")
+      console.log("✅ absurd-sql filesystem mounted at /opfs")
 
       // Open or create database in OPFS
       const dbPath = "/opfs/writi-blocks.db"
 
       try {
-        // Try to open existing database
+        // Try to open existing database from OPFS
         this.db = new this.SQL.Database(dbPath)
         console.log("✅ Opened existing OPFS database:", dbPath)
       } catch (error) {
-        // Create new database if it doesn't exist
+        console.log("📝 No existing database found, creating new one...")
+        // Create new database in memory first
         this.db = new this.SQL.Database()
-        console.log("✅ Created new OPFS database:", dbPath)
+        console.log(
+          "✅ Created new in-memory database, will save to OPFS after setup"
+        )
       }
 
       // Set optimized settings for performance

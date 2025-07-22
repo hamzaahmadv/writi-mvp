@@ -536,3 +536,31 @@ export async function postEdit({ filePath, success }) {
   }
 }
 ```
+
+---
+
+## 🧯 Known Package Forks & Warnings
+
+| Package         | Required Fork / Version     | Why                                                      |
+|-----------------|-----------------------------|-----------------------------------------------------------|
+| `sql.js`        | `@jlongster/sql.js`         | Required for OPFS/FS support used by absurd-sql           |
+| `supabase-js`   | v2+                         | Breaking changes from v1, especially in Realtime/auth     |
+| `drizzle-orm`   | n/a                         | Edge runtime differences, some operators behave subtly    |
+| `sharedworker`  | `type: 'module'`            | Legacy workers may fail silently in modern browsers       |
+| `comlink`       | `wrap()` + `expose()` check | Breaks if used with raw postMessage or legacy workers     |
+
+---
+
+## 🧠 Sync Conflict Rules
+
+- When `storageMode === "local-first"`, **disable** `enableRealtimeSync` to avoid SharedWorker collisions.
+- Leader tab writes are enforced — use `tab-coordination-worker.ts` to detect and route sync ops.
+- Never run both `useBlocks` and `useRealtimeBlocks` simultaneously unless specifically coordinated.
+
+---
+
+## 🧪 Test Strategy (Start Here)
+
+- ✅ Manual test suite: SQLite OPFS persistence, rollback on error, multi-tab sync
+- 🔜 Add Playwright test for tab coordination and transaction merge
+- 🔜 Add mock test for `sqlite-worker.ts` using JSDOM + worker-threads

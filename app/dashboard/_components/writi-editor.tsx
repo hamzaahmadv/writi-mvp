@@ -94,10 +94,12 @@ export default function WritiEditor({
     enableOfflineFirst ? { autoInitialize: true } : { autoInitialize: false }
   )
 
-  // Phase 5: Realtime sync with Supabase (now used for all pages)
+  // Phase 5: Realtime sync with Supabase (only when not in local-first mode)
+  const shouldEnableRealtime =
+    enableRealtimeSync && storageMode !== "local-first"
   const realtimeBlocks = useRealtimeBlocks({
-    pageId: enableRealtimeSync ? currentPage?.id || null : null,
-    enabled: enableRealtimeSync
+    pageId: shouldEnableRealtime ? currentPage?.id || null : null,
+    enabled: shouldEnableRealtime
   })
 
   // Phase 3: Breadth-first loading for large documents (now used for all pages)
@@ -117,8 +119,7 @@ export default function WritiEditor({
 
   // Blocks management - prioritize storageMode over realtime sync
   // In local-first mode, always use regularBlocks (basic SQLite) for instant performance
-  const shouldUseRealtimeBlocks =
-    enableRealtimeSync && storageMode !== "local-first"
+  const shouldUseRealtimeBlocks = shouldEnableRealtime
 
   const {
     blocks,

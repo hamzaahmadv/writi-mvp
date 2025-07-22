@@ -1,8 +1,8 @@
 import * as Comlink from "comlink"
 import type { SQLiteWorkerAPI, Block, SyncState } from "./sqlite-worker"
+import { getSQLiteWorker } from "./sqlite-worker-manager"
 
 class SQLiteClient {
-  private worker: Worker | null = null
   private api: Comlink.Remote<SQLiteWorkerAPI> | null = null
   private isInitialized = false
 
@@ -10,32 +10,11 @@ class SQLiteClient {
     if (this.isInitialized) return
 
     try {
-      // Create the worker
-      this.worker = new Worker(new URL("./sqlite-worker.ts", import.meta.url), {
-        type: "module"
-      })
+      // Use the shared SQLite worker instead of creating a new one
+      this.api = await getSQLiteWorker()
+      console.log("SQLiteClient connected to shared worker")
 
-      // Set up error handling for the worker
-      this.worker.onerror = error => {
-        console.error("SQLite worker error:", error)
-      }
-
-      this.worker.onmessageerror = error => {
-        console.error("SQLite worker message error:", error)
-      }
-
-      // Wrap with Comlink
-      this.api = Comlink.wrap<SQLiteWorkerAPI>(this.worker)
-
-      // Initialize the database in the worker with timeout
-      const initTimeout = new Promise((_, reject) => {
-        setTimeout(
-          () => reject(new Error("SQLite initialization timeout")),
-          10000
-        )
-      })
-
-      await Promise.race([this.api.initialize(), initTimeout])
+      // Worker is already initialized by the manager, so we can use it directly
 
       this.isInitialized = true
       console.log("SQLite client initialized successfully")
@@ -43,10 +22,6 @@ class SQLiteClient {
       console.error("Failed to initialize SQLite client:", error)
 
       // Clean up on failure
-      if (this.worker) {
-        this.worker.terminate()
-        this.worker = null
-      }
       this.api = null
 
       throw error
@@ -234,15 +209,7 @@ class SQLiteClient {
   }
 
   async close(): Promise<void> {
-    if (this.api) {
-      await this.api.close()
-    }
-
-    if (this.worker) {
-      this.worker.terminate()
-      this.worker = null
-    }
-
+    // Note: We don't close the shared worker as other components may be using it
     this.api = null
     this.isInitialized = false
     console.log("SQLite client closed")

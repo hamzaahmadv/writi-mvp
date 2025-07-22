@@ -1,5 +1,6 @@
 import * as Comlink from "comlink"
 import type { SQLiteWorkerAPI } from "./sqlite-worker"
+import { getSQLiteWorker } from "./sqlite-worker-manager"
 import type {
   Transaction,
   TransactionType,
@@ -22,7 +23,6 @@ const DEFAULT_CONFIG: TransactionQueueConfig = {
 }
 
 export class TransactionQueue {
-  private worker: Worker | null = null
   private api: Comlink.Remote<SQLiteWorkerAPI> | null = null
   private isInitialized = false
   private config: TransactionQueueConfig
@@ -47,28 +47,12 @@ export class TransactionQueue {
         return
       }
 
-      // Create the worker
-      this.worker = new Worker(new URL("./sqlite-worker.ts", import.meta.url), {
-        type: "module"
-      })
-
-      // Set up error handling for the worker
-      this.worker.onerror = error => {
-        console.error("TransactionQueue worker error:", error)
-        // Don't throw - continue without worker
-        this.worker = null
-        this.api = null
-      }
-
-      // Wrap with Comlink
-      this.api = Comlink.wrap<SQLiteWorkerAPI>(this.worker)
-
-      // Initialize the database in the worker
+      // Use the shared SQLite worker instead of creating a new one
       try {
-        await this.api.initialize()
-        console.log("SQLite API initialized successfully in TransactionQueue")
+        this.api = await getSQLiteWorker()
+        console.log("TransactionQueue connected to shared SQLite worker")
       } catch (initError) {
-        console.error("Failed to initialize SQLite API:", initError)
+        console.error("Failed to connect to shared SQLite worker:", initError)
         throw new Error(
           `Failed to initialize TransactionQueue API: ${initError}`
         )
@@ -536,15 +520,7 @@ export class TransactionQueue {
       this.syncTimer = null
     }
 
-    if (this.api) {
-      await this.api.close()
-    }
-
-    if (this.worker) {
-      this.worker.terminate()
-      this.worker = null
-    }
-
+    // Note: We don't close the shared worker as other components may be using it
     this.api = null
     this.isInitialized = false
     this.eventListeners.clear()
