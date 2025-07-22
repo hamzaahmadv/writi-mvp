@@ -418,6 +418,40 @@ The editor header now shows:
 
 ## Claude Code Hooks & Settings
 
+### MCP Server Configuration
+
+This project is configured with several MCP (Model Context Protocol) servers for enhanced development capabilities:
+
+```bash
+# View current MCP servers
+/mcp list
+```
+
+**Available MCP Servers:**
+- **context7**: Library documentation and code examples lookup
+- **playwright**: Browser automation and testing
+- **supabase**: Database operations, migrations, and edge functions
+- **ide**: VS Code integration and diagnostics
+- **browser-tools**: Browser debugging and auditing tools
+
+**Usage Examples:**
+```bash
+# Get library documentation
+/mcp context7 resolve-library-id react
+/mcp context7 get-library-docs /facebook/react
+
+# Browser automation
+/mcp playwright browser_navigate https://example.com
+/mcp playwright browser_take_screenshot
+
+# Database operations
+/mcp supabase list_tables
+/mcp supabase execute_sql "SELECT * FROM pages LIMIT 5"
+
+# IDE diagnostics
+/mcp ide getDiagnostics
+```
+
 ### Default Hooks Setup
 
 Create `.claude/hooks.mjs` with these recommended hooks:
