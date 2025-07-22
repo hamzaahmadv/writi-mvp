@@ -450,9 +450,22 @@ export function useAbsurdSQLBlocks(
               )
               await workerRef.current!.upsertBlock(updatedWorkerBlock)
 
-              setBlocks(prev =>
-                prev.map(block => (block.id === blockId ? realBlock : block))
-              )
+              setBlocks(prev => {
+                const updated = prev.map(block =>
+                  block.id === blockId ? realBlock : block
+                )
+
+                // If this was the currently focused block (temp ID), we need to maintain focus
+                // by notifying the parent component about the ID change
+                const wasTemp = blockId.startsWith("temp_")
+                if (wasTemp) {
+                  console.log(
+                    `🔄 Block ID changed from temp ${blockId} to real ${realBlock.id}`
+                  )
+                }
+
+                return updated
+              })
 
               await workerRef.current!.updateTransactionStatus(
                 transaction.id,

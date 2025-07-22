@@ -104,22 +104,30 @@ export function BlockRenderer({
       contentRef.current &&
       document.activeElement !== contentRef.current
     ) {
-      // Instant focus for immediate cursor appearance
-      contentRef.current.focus()
-      // Place cursor at end for smooth typing continuation
-      const range = document.createRange()
-      const selection = window.getSelection()
-      if (contentRef.current.childNodes.length > 0) {
-        range.selectNodeContents(contentRef.current)
-        range.collapse(false)
-      } else {
-        range.setStart(contentRef.current, 0)
-        range.setEnd(contentRef.current, 0)
-      }
-      selection?.removeAllRanges()
-      selection?.addRange(range)
+      // Use requestAnimationFrame to ensure DOM is ready after any React updates
+      requestAnimationFrame(() => {
+        if (
+          contentRef.current &&
+          document.activeElement !== contentRef.current
+        ) {
+          // Instant focus for immediate cursor appearance
+          contentRef.current.focus()
+          // Place cursor at end for smooth typing continuation
+          const range = document.createRange()
+          const selection = window.getSelection()
+          if (contentRef.current.childNodes.length > 0) {
+            range.selectNodeContents(contentRef.current)
+            range.collapse(false)
+          } else {
+            range.setStart(contentRef.current, 0)
+            range.setEnd(contentRef.current, 0)
+          }
+          selection?.removeAllRanges()
+          selection?.addRange(range)
+        }
+      })
     }
-  }, [isFocused, userInteracted])
+  }, [isFocused, userInteracted, block.id])
 
   // Set initial content and handle instant focus for new blocks
   useEffect(() => {
@@ -132,22 +140,74 @@ export function BlockRenderer({
     }
 
     // Instant focus for new empty blocks created via Enter key
+    // Also maintain focus when temp blocks get real IDs from Supabase
     if (
       isFocused &&
       userInteracted &&
       contentRef.current &&
       !block.content &&
-      block.id.startsWith("temp_")
+      (block.id.startsWith("temp_") ||
+        document.activeElement !== contentRef.current)
     ) {
-      contentRef.current.focus()
-      const range = document.createRange()
-      const selection = window.getSelection()
-      range.setStart(contentRef.current, 0)
-      range.setEnd(contentRef.current, 0)
-      selection?.removeAllRanges()
-      selection?.addRange(range)
+      // Use multiple requestAnimationFrame calls to ensure focus persistence
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (contentRef.current && isFocused) {
+            contentRef.current.focus()
+            const range = document.createRange()
+            const selection = window.getSelection()
+            range.setStart(contentRef.current, 0)
+            range.setEnd(contentRef.current, 0)
+            selection?.removeAllRanges()
+            selection?.addRange(range)
+          }
+        })
+      })
     }
   }, [block.id, isFocused, userInteracted])
+
+  // Focus watcher - re-establish focus if it gets lost during updates
+  useEffect(() => {
+    if (isFocused && userInteracted && contentRef.current) {
+      let focusCheckInterval: NodeJS.Timeout
+
+      // Check focus state every 100ms and restore if lost
+      const checkFocus = () => {
+        if (
+          isFocused &&
+          userInteracted &&
+          contentRef.current &&
+          document.activeElement !== contentRef.current &&
+          !document.activeElement?.closest("[data-slash-menu]") // Don't steal focus from slash menu
+        ) {
+          console.log("🔍 Restoring lost focus to block:", block.id)
+          contentRef.current.focus()
+
+          // Re-position cursor appropriately
+          const range = document.createRange()
+          const selection = window.getSelection()
+          if (contentRef.current.childNodes.length > 0) {
+            range.selectNodeContents(contentRef.current)
+            range.collapse(false) // Place at end
+          } else {
+            range.setStart(contentRef.current, 0)
+            range.setEnd(contentRef.current, 0)
+          }
+          selection?.removeAllRanges()
+          selection?.addRange(range)
+        }
+      }
+
+      // Start focus monitoring
+      focusCheckInterval = setInterval(checkFocus, 100)
+
+      return () => {
+        if (focusCheckInterval) {
+          clearInterval(focusCheckInterval)
+        }
+      }
+    }
+  }, [isFocused, userInteracted, block.id])
 
   // Cleanup timeout on unmount
   useEffect(() => {

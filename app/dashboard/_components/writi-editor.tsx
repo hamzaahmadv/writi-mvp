@@ -174,10 +174,40 @@ export default function WritiEditor({
     console.log(
       `WritiEditor: Syncing ${currentBlocks.length} blocks for page ${currentPage?.id}`
     )
-    setEditorState(prev => ({
-      ...prev,
-      blocks: currentBlocks
-    }))
+    setEditorState(prev => {
+      // Check if we need to update the focused block ID (temp -> real ID transition)
+      let newFocusedBlockId = prev.focusedBlockId
+
+      if (newFocusedBlockId && newFocusedBlockId.startsWith("temp_")) {
+        // Find if any new block might be the replacement for the focused temp block
+        const tempFocusedBlock = prev.blocks.find(
+          b => b.id === newFocusedBlockId
+        )
+        if (tempFocusedBlock) {
+          // Look for a block with same content and order but different (real) ID
+          const possibleReplacement = currentBlocks.find(
+            b =>
+              b.content === tempFocusedBlock.content &&
+              b.order === tempFocusedBlock.order &&
+              !b.id.startsWith("temp_") &&
+              b.id !== newFocusedBlockId
+          )
+
+          if (possibleReplacement) {
+            newFocusedBlockId = possibleReplacement.id
+            console.log(
+              `🎯 Focus updated from temp ${prev.focusedBlockId} to real ${newFocusedBlockId}`
+            )
+          }
+        }
+      }
+
+      return {
+        ...prev,
+        blocks: currentBlocks,
+        focusedBlockId: newFocusedBlockId
+      }
+    })
   }, [currentBlocks, currentPage?.id])
 
   // Track user interactions to prevent unwanted auto-focus
