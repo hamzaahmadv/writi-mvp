@@ -425,6 +425,13 @@ export function useAbsurdSQLBlocks(
               userId
             )
 
+            // Validate that we got a proper UUID
+            const uuidRegex =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+            if (!uuidRegex.test(databasePageId)) {
+              throw new Error(`Invalid UUID format for page: ${databasePageId}`)
+            }
+
             const result = await createBlockAction({
               userId,
               pageId: databasePageId,
@@ -464,6 +471,15 @@ export function useAbsurdSQLBlocks(
               )
             }
           } catch (syncError) {
+            const errorMessage =
+              syncError instanceof Error ? syncError.message : String(syncError)
+            console.error("❌ Sync error:", errorMessage)
+
+            // If it's a UUID validation error, mark as permanently failed
+            const isPermanentFailure =
+              errorMessage.includes("Invalid UUID format") ||
+              errorMessage.includes("invalid input syntax for type uuid")
+
             await workerRef.current!.updateTransactionStatus(
               transaction.id,
               "failed",
