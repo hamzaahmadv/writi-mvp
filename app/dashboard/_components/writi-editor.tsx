@@ -101,7 +101,8 @@ export default function WritiEditor({
   })
 
   // Phase 3: Breadth-first loading for large documents (now used for all pages)
-  const breadthFirstBlocks = useBreadthFirstBlocks(
+  // Note: breadthFirstBlocks is available but we're using regularBlocks for unified approach
+  useBreadthFirstBlocks(
     userId,
     useBreadthFirstLoading ? currentPage?.id || null : null,
     {
