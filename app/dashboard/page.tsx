@@ -289,7 +289,6 @@ export default function DashboardPage() {
             key={`${selectedEssential || currentPage?.id || "loading"}`}
             currentPage={getDisplayPage()}
             onUpdatePage={handleUpdateEssentialPage}
-            isEssential={selectedEssential !== null}
             onBackToDocuments={() => setSelectedEssential(null)}
             isPreloaded={
               selectedEssential
@@ -297,6 +296,7 @@ export default function DashboardPage() {
                 : true
             }
             useBreadthFirstLoading={false}
+            storageMode="local-first"
             enableRealtimeSync={false}
             enableOfflineFirst={false}
           />

@@ -49,23 +49,23 @@ import { SelectPage } from "@/db/schema"
 interface WritiEditorProps {
   currentPage: SelectPage | null
   onUpdatePage: (updates: Partial<SelectPage>) => Promise<void>
-  isEssential?: boolean
   onBackToDocuments?: () => void
   isPreloaded?: boolean
   useBreadthFirstLoading?: boolean
   enableRealtimeSync?: boolean
   enableOfflineFirst?: boolean
+  storageMode?: "local-first" // New unified mode
 }
 
 export default function WritiEditor({
   currentPage,
   onUpdatePage,
-  isEssential = false,
   onBackToDocuments,
   isPreloaded = false,
   useBreadthFirstLoading = false,
   enableRealtimeSync = true,
-  enableOfflineFirst = true
+  enableOfflineFirst = true,
+  storageMode = "local-first"
 }: WritiEditorProps) {
   // Authentication
   const { userId, isLoaded: userLoaded } = useCurrentUser()
@@ -77,39 +77,33 @@ export default function WritiEditor({
   const { batchUpdate: batchUpdateBlock, flushBatch: flushBlockBatch } =
     useBlockBatch(
       async (blockId: string, updates: Partial<Block>) => {
-        if (isEssential) {
-          await updateEssentialBlock(blockId, updates)
-        } else {
-          await updateBlockInDb(blockId, updates)
-        }
+        await updateBlockInDb(blockId, updates)
       },
       50 // Reduced batch timeout for faster block updates
     )
 
-  // Phase 2: Transaction Queue for offline-first sync
+  // Phase 2: Transaction Queue for offline-first sync (now used for all pages)
   const {
     enqueue: enqueueTransaction,
     syncState,
     queueStats
-  } = useTransactionQueue(enableOfflineFirst && !isEssential ? {} : undefined)
+  } = useTransactionQueue(enableOfflineFirst ? {} : undefined)
 
-  // Phase 4: Multi-tab coordination
+  // Phase 4: Multi-tab coordination (now used for all pages)
   const { isLeader, broadcastSyncEvent: broadcastSync } = useTabCoordination(
-    enableOfflineFirst && !isEssential
-      ? { autoInitialize: true }
-      : { autoInitialize: false }
+    enableOfflineFirst ? { autoInitialize: true } : { autoInitialize: false }
   )
 
-  // Phase 5: Realtime sync with Supabase
+  // Phase 5: Realtime sync with Supabase (now used for all pages)
   const realtimeBlocks = useRealtimeBlocks({
-    pageId: enableRealtimeSync && !isEssential ? currentPage?.id || null : null,
-    enabled: enableRealtimeSync && !isEssential
+    pageId: enableRealtimeSync ? currentPage?.id || null : null,
+    enabled: enableRealtimeSync
   })
 
-  // Phase 3: Breadth-first loading for large documents
+  // Phase 3: Breadth-first loading for large documents (now used for all pages)
   const breadthFirstBlocks = useBreadthFirstBlocks(
     userId,
-    useBreadthFirstLoading && !isEssential ? currentPage?.id || null : null,
+    useBreadthFirstLoading ? currentPage?.id || null : null,
     {
       pageSize: 50,
       maxDepth: 10,
@@ -117,13 +111,10 @@ export default function WritiEditor({
     }
   )
 
-  // Regular blocks management (always call the hook)
-  const regularBlocks = useBlocks(
-    userId,
-    isEssential ? null : currentPage?.id || null
-  )
+  // Unified blocks management - uses SQLite WASM as primary data source for all pages
+  const regularBlocks = useBlocks(userId, currentPage?.id || null)
 
-  // Blocks management - use database for regular pages, localStorage for essentials
+  // Blocks management - now unified using local-first SQLite approach
   const {
     blocks,
     isLoading: blocksLoading,
@@ -132,60 +123,11 @@ export default function WritiEditor({
     updateBlock: updateBlockInDb,
     deleteBlock: deleteBlockInDb,
     moveBlock: moveBlockInDb
-  } = enableRealtimeSync && !isEssential ? realtimeBlocks : regularBlocks
+  } = enableRealtimeSync ? realtimeBlocks : regularBlocks
 
-  // Local storage for essential blocks
-  const [essentialBlocks, setEssentialBlocks] = useState<Block[]>([])
-  const [essentialLoading, setEssentialLoading] = useState(false)
-
-  // Load essential blocks from localStorage instantly
-  useEffect(() => {
-    if (isEssential && currentPage?.id) {
-      setEssentialLoading(true)
-      const saved = localStorage.getItem(`essential-blocks-${currentPage.id}`)
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved)
-          setEssentialBlocks(parsed)
-        } catch (error) {
-          console.error("Error loading essential blocks:", error)
-          setEssentialBlocks([])
-        }
-      } else {
-        setEssentialBlocks([])
-      }
-      setEssentialLoading(false)
-    } else if (!isEssential) {
-      // Clear essential blocks when switching to database mode
-      setEssentialBlocks([])
-      setEssentialLoading(false)
-    }
-  }, [isEssential, currentPage?.id])
-
-  // Save essential blocks to localStorage with better error handling
-  const saveEssentialBlocks = useCallback(
-    (blocks: Block[]) => {
-      if (isEssential && currentPage?.id) {
-        try {
-          localStorage.setItem(
-            `essential-blocks-${currentPage.id}`,
-            JSON.stringify(blocks)
-          )
-        } catch (error) {
-          console.error(
-            "Failed to save essential blocks to localStorage:",
-            error
-          )
-          // Could implement fallback storage or user notification here
-        }
-      }
-    },
-    [isEssential, currentPage?.id]
-  )
-
-  // Get current blocks (essential or database)
-  const currentBlocks = isEssential ? essentialBlocks : blocks
-  const currentBlocksLoading = isEssential ? essentialLoading : blocksLoading
+  // Current blocks (now always from unified SQLite storage)
+  const currentBlocks = blocks
+  const currentBlocksLoading = blocksLoading
 
   // Track if welcome content has been created for this page to prevent duplicates
   const [welcomeContentCreated, setWelcomeContentCreated] = useState<
@@ -297,202 +239,34 @@ export default function WritiEditor({
   }, [])
 
   // Check if welcome content has been created for this page (using localStorage for persistence)
-  const getWelcomeContentKey = (pageId: string, isEssential: boolean) => {
-    return `writi-welcome-created-${isEssential ? "essential-" : ""}${pageId}`
+  const getWelcomeContentKey = (pageId: string) => {
+    return `writi-welcome-created-${pageId}`
   }
 
   const hasWelcomeContentBeenCreated = useCallback(
     (pageId: string) => {
-      if (isEssential) {
-        // For essential pages, check localStorage
-        return (
-          localStorage.getItem(getWelcomeContentKey(pageId, true)) === "true"
-        )
-      } else {
-        // For regular pages, check our state and localStorage as backup
-        return (
-          welcomeContentCreated.has(pageId) ||
-          localStorage.getItem(getWelcomeContentKey(pageId, false)) === "true"
-        )
-      }
+      // Check our state and localStorage as backup
+      return (
+        welcomeContentCreated.has(pageId) ||
+        localStorage.getItem(getWelcomeContentKey(pageId)) === "true"
+      )
     },
-    [isEssential, welcomeContentCreated]
+    [welcomeContentCreated]
   )
 
-  const markWelcomeContentCreated = useCallback(
-    (pageId: string) => {
-      const key = getWelcomeContentKey(pageId, isEssential)
-      localStorage.setItem(key, "true")
+  const markWelcomeContentCreated = useCallback((pageId: string) => {
+    const key = getWelcomeContentKey(pageId)
+    localStorage.setItem(key, "true")
+    setWelcomeContentCreated(prev => new Set([...prev, pageId]))
+  }, [])
 
-      if (!isEssential) {
-        setWelcomeContentCreated(prev => new Set([...prev, pageId]))
-      }
-    },
-    [isEssential]
-  )
-
-  // Essential block operations
-  const createEssentialBlock = useCallback(
-    async (
-      afterId?: string,
-      type: BlockType = "paragraph"
-    ): Promise<string | null> => {
-      if (!currentPage?.id) return null
-
-      const newBlockId = `essential-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-      const newBlock: Block = {
-        id: newBlockId,
-        type,
-        content: "",
-        children: [],
-        props: { createdAt: new Date().toISOString() }
-      }
-
-      setEssentialBlocks(prev => {
-        const newBlocks = [...prev]
-
-        if (afterId === "first") {
-          // Insert at the beginning for first position
-          newBlocks.unshift(newBlock)
-        } else if (afterId) {
-          const afterIndex = newBlocks.findIndex(b => b.id === afterId)
-          if (afterIndex !== -1) {
-            newBlocks.splice(afterIndex + 1, 0, newBlock)
-          } else {
-            // If afterId not found, append to end
-            newBlocks.push(newBlock)
-          }
-        } else {
-          // No afterId specified, append to end
-          newBlocks.push(newBlock)
-        }
-
-        // Save to localStorage asynchronously to avoid blocking UI
-        requestAnimationFrame(() => {
-          saveEssentialBlocks(newBlocks)
-        })
-
-        return newBlocks
-      })
-
-      return newBlockId
-    },
-    [currentPage?.id, saveEssentialBlocks]
-  )
-
-  const updateEssentialBlock = useCallback(
-    async (id: string, updates: Partial<Block>): Promise<void> => {
-      setEssentialBlocks(prev => {
-        // Check if the block actually exists and needs updating
-        const blockIndex = prev.findIndex(block => block.id === id)
-        if (blockIndex === -1) {
-          console.warn(`Block with id ${id} not found in essential blocks`)
-          return prev
-        }
-
-        const existingBlock = prev[blockIndex]
-
-        // Check if there are actual changes to avoid unnecessary updates
-        const hasChanges = Object.keys(updates).some(key => {
-          const typedKey = key as keyof Block
-          return existingBlock[typedKey] !== updates[typedKey]
-        })
-
-        if (!hasChanges) {
-          return prev // No changes, return previous state
-        }
-
-        const newBlocks = [...prev]
-        newBlocks[blockIndex] = { ...existingBlock, ...updates }
-
-        // Save to localStorage asynchronously to avoid blocking UI
-        requestAnimationFrame(() => {
-          saveEssentialBlocks(newBlocks)
-        })
-
-        return newBlocks
-      })
-    },
-    [saveEssentialBlocks]
-  )
-
-  const deleteEssentialBlock = useCallback(
-    async (id: string): Promise<void> => {
-      setEssentialBlocks(prev => {
-        const blockExists = prev.some(block => block.id === id)
-        if (!blockExists) {
-          console.warn(`Block with id ${id} not found for deletion`)
-          return prev
-        }
-
-        const newBlocks = prev.filter(block => block.id !== id)
-
-        // Save to localStorage asynchronously to avoid blocking UI
-        requestAnimationFrame(() => {
-          saveEssentialBlocks(newBlocks)
-        })
-
-        return newBlocks
-      })
-    },
-    [saveEssentialBlocks]
-  )
-
-  const moveEssentialBlock = useCallback(
-    async (
-      dragId: string,
-      hoverId: string,
-      position: "before" | "after"
-    ): Promise<void> => {
-      setEssentialBlocks(prev => {
-        const newBlocks = [...prev]
-        const dragIndex = newBlocks.findIndex(b => b.id === dragId)
-        const hoverIndex = newBlocks.findIndex(b => b.id === hoverId)
-
-        if (dragIndex === -1) {
-          console.warn(`Drag block with id ${dragId} not found`)
-          return prev
-        }
-
-        if (hoverIndex === -1) {
-          console.warn(`Hover block with id ${hoverId} not found`)
-          return prev
-        }
-
-        if (dragIndex === hoverIndex) {
-          return prev // No movement needed
-        }
-
-        const dragBlock = newBlocks[dragIndex]
-        newBlocks.splice(dragIndex, 1)
-
-        const newHoverIndex = newBlocks.findIndex(b => b.id === hoverId)
-        const insertIndex =
-          position === "before" ? newHoverIndex : newHoverIndex + 1
-        newBlocks.splice(insertIndex, 0, dragBlock)
-
-        // Save to localStorage asynchronously to avoid blocking UI
-        requestAnimationFrame(() => {
-          saveEssentialBlocks(newBlocks)
-        })
-
-        return newBlocks
-      })
-    },
-    [saveEssentialBlocks]
-  )
-
-  // Handle block moving for drag and drop
+  // Handle block moving for drag and drop (now unified)
   const handleMoveBlock = useCallback(
     (dragId: string, hoverId: string, position: "before" | "after") => {
-      // Call the existing moveBlock action
-      if (isEssential) {
-        moveEssentialBlock(dragId, hoverId, position)
-      } else {
-        moveBlockInDb(dragId, hoverId, position)
-      }
+      // Use the unified block operations
+      moveBlockInDb(dragId, hoverId, position)
     },
-    [isEssential, moveEssentialBlock, moveBlockInDb]
+    [moveBlockInDb]
   )
 
   // Mark initial content as created if we have blocks and haven't marked it yet
@@ -524,11 +298,14 @@ export default function WritiEditor({
       // Mark as created immediately to prevent duplicates
       markWelcomeContentCreated(currentPage.id)
 
-      if (isEssential) {
-        // Create initial content for essentials
-        createEssentialBlock(undefined, "heading_1").then(blockId => {
+      // Check if this is an essential page and create appropriate content
+      const isEssentialPage = currentPage.id.startsWith("essential-")
+
+      if (isEssentialPage) {
+        // Create initial content for essential pages
+        createBlockInDb(undefined, "heading_1").then(blockId => {
           if (blockId) {
-            updateEssentialBlock(blockId, {
+            updateBlockInDb(blockId, {
               content:
                 currentPage.id === "essential-todo"
                   ? "To-do List / Planner"
@@ -536,9 +313,9 @@ export default function WritiEditor({
             })
             // Create a paragraph block below
             setTimeout(() => {
-              createEssentialBlock(blockId, "paragraph").then(paragraphId => {
+              createBlockInDb(blockId, "paragraph").then(paragraphId => {
                 if (paragraphId) {
-                  updateEssentialBlock(paragraphId, {
+                  updateBlockInDb(paragraphId, {
                     content:
                       currentPage.id === "essential-todo"
                         ? "Create and manage your tasks efficiently. Start typing to add your first task..."
@@ -550,7 +327,7 @@ export default function WritiEditor({
           }
         })
       } else {
-        // Create a simple paragraph block for new pages
+        // Create a simple paragraph block for new regular pages
         createBlockInDb(undefined, "paragraph").then(blockId => {
           if (blockId) {
             updateBlockInDb(blockId, {
@@ -565,13 +342,10 @@ export default function WritiEditor({
     currentBlocks.length,
     currentBlocksLoading,
     userId,
-    isEssential,
     hasWelcomeContentBeenCreated,
     markWelcomeContentCreated,
     createBlockInDb,
-    updateBlockInDb,
-    createEssentialBlock,
-    updateEssentialBlock
+    updateBlockInDb
   ])
 
   // Find block by ID (supports nested blocks)
@@ -600,17 +374,10 @@ export default function WritiEditor({
         if (!userId || !currentPage) return null
 
         try {
-          const newBlockId = isEssential
-            ? await createEssentialBlock(afterId, type)
-            : await createBlockInDb(afterId, type)
+          const newBlockId = await createBlockInDb(afterId, type)
 
           // Queue transaction for offline-first sync
-          if (
-            enableOfflineFirst &&
-            !isEssential &&
-            newBlockId &&
-            enqueueTransaction
-          ) {
+          if (enableOfflineFirst && newBlockId && enqueueTransaction) {
             enqueueTransaction(
               "create_block",
               { blockId: newBlockId, afterId, type, pageId: currentPage.id },
@@ -620,12 +387,7 @@ export default function WritiEditor({
           }
 
           // Broadcast sync event to other tabs
-          if (
-            enableOfflineFirst &&
-            !isEssential &&
-            newBlockId &&
-            broadcastSync
-          ) {
+          if (enableOfflineFirst && newBlockId && broadcastSync) {
             broadcastSync({
               type: "block-create",
               pageId: currentPage.id,
@@ -653,8 +415,6 @@ export default function WritiEditor({
       [
         userId,
         currentPage,
-        isEssential,
-        createEssentialBlock,
         createBlockInDb,
         enableOfflineFirst,
         enqueueTransaction,
@@ -669,12 +429,7 @@ export default function WritiEditor({
           batchUpdateBlock(id, updates)
 
           // Queue transaction for offline-first sync
-          if (
-            enableOfflineFirst &&
-            !isEssential &&
-            enqueueTransaction &&
-            currentPage
-          ) {
+          if (enableOfflineFirst && enqueueTransaction && currentPage) {
             enqueueTransaction(
               "update_block",
               { blockId: id, updates },
@@ -684,12 +439,7 @@ export default function WritiEditor({
           }
 
           // Broadcast sync event to other tabs
-          if (
-            enableOfflineFirst &&
-            !isEssential &&
-            broadcastSync &&
-            currentPage
-          ) {
+          if (enableOfflineFirst && broadcastSync && currentPage) {
             broadcastSync({
               type: "block-update",
               pageId: currentPage.id,
@@ -706,7 +456,6 @@ export default function WritiEditor({
       [
         batchUpdateBlock,
         enableOfflineFirst,
-        isEssential,
         enqueueTransaction,
         broadcastSync,
         currentPage,
@@ -717,19 +466,10 @@ export default function WritiEditor({
     deleteBlock: useCallback(
       async (id: string) => {
         try {
-          if (isEssential) {
-            await deleteEssentialBlock(id)
-          } else {
-            await deleteBlockInDb(id)
-          }
+          await deleteBlockInDb(id)
 
           // Queue transaction for offline-first sync
-          if (
-            enableOfflineFirst &&
-            !isEssential &&
-            enqueueTransaction &&
-            currentPage
-          ) {
+          if (enableOfflineFirst && enqueueTransaction && currentPage) {
             enqueueTransaction(
               "delete_block",
               { blockId: id },
@@ -739,12 +479,7 @@ export default function WritiEditor({
           }
 
           // Broadcast sync event to other tabs
-          if (
-            enableOfflineFirst &&
-            !isEssential &&
-            broadcastSync &&
-            currentPage
-          ) {
+          if (enableOfflineFirst && broadcastSync && currentPage) {
             broadcastSync({
               type: "block-delete",
               pageId: currentPage.id,
@@ -766,8 +501,6 @@ export default function WritiEditor({
         }
       },
       [
-        isEssential,
-        deleteEssentialBlock,
         deleteBlockInDb,
         enableOfflineFirst,
         enqueueTransaction,
@@ -780,16 +513,12 @@ export default function WritiEditor({
     moveBlock: useCallback(
       async (dragId: string, hoverId: string, position: "before" | "after") => {
         try {
-          if (isEssential) {
-            await moveEssentialBlock(dragId, hoverId, position)
-          } else {
-            await moveBlockInDb(dragId, hoverId, position)
-          }
+          await moveBlockInDb(dragId, hoverId, position)
         } catch (error) {
           console.error("Failed to move block:", error)
         }
       },
-      [isEssential, moveEssentialBlock, moveBlockInDb]
+      [moveBlockInDb]
     ),
 
     indentBlock: useCallback((id: string) => {
@@ -872,11 +601,7 @@ export default function WritiEditor({
         // Delete blocks in parallel for better performance
         await Promise.all(
           blockIdsToDelete.map(async blockId => {
-            if (isEssential) {
-              await deleteEssentialBlock(blockId)
-            } else {
-              await deleteBlockInDb(blockId)
-            }
+            await deleteBlockInDb(blockId)
           })
         )
 
@@ -891,12 +616,7 @@ export default function WritiEditor({
       } catch (error) {
         console.error("Failed to delete selected blocks:", error)
       }
-    }, [
-      editorState.selectedBlockIds,
-      isEssential,
-      deleteEssentialBlock,
-      deleteBlockInDb
-    ]),
+    }, [editorState.selectedBlockIds, deleteBlockInDb]),
 
     showSlashMenu: useCallback(
       (blockId: string, position: { x: number; y: number }) => {
@@ -923,17 +643,10 @@ export default function WritiEditor({
       async (command: SlashCommand, blockId: string) => {
         try {
           // Update the block type and clear content
-          if (isEssential) {
-            await updateEssentialBlock(blockId, {
-              type: command.blockType,
-              content: ""
-            })
-          } else {
-            await updateBlockInDb(blockId, {
-              type: command.blockType,
-              content: ""
-            })
-          }
+          await updateBlockInDb(blockId, {
+            type: command.blockType,
+            content: ""
+          })
 
           setEditorState(prev => ({
             ...prev,
@@ -945,7 +658,7 @@ export default function WritiEditor({
           console.error("Failed to execute slash command:", error)
         }
       },
-      [isEssential, updateEssentialBlock, updateBlockInDb]
+      [updateBlockInDb]
     ),
 
     navigateToPreviousBlock: useCallback(
@@ -1295,8 +1008,8 @@ export default function WritiEditor({
     )
   }
 
-  // Error states (only for non-essential pages)
-  if (!isEssential && blocksError) {
+  // Error states
+  if (blocksError) {
     return (
       <div className="p-8">
         <Alert>
@@ -1337,13 +1050,10 @@ export default function WritiEditor({
   if (typeof window !== "undefined") {
     ;(window as any).resetWelcomeContent = (pageId?: string) => {
       if (pageId) {
-        localStorage.removeItem(getWelcomeContentKey(pageId, false))
-        localStorage.removeItem(getWelcomeContentKey(pageId, true))
+        localStorage.removeItem(getWelcomeContentKey(pageId))
         console.log(`Reset welcome content for page: ${pageId}`)
       } else if (currentPage) {
-        localStorage.removeItem(
-          getWelcomeContentKey(currentPage.id, isEssential)
-        )
+        localStorage.removeItem(getWelcomeContentKey(currentPage.id))
         console.log(`Reset welcome content for current page: ${currentPage.id}`)
       } else {
         console.log("No page ID provided and no current page")
@@ -1370,11 +1080,9 @@ export default function WritiEditor({
               size="sm"
               className="size-8 rounded-md p-0 hover:bg-gray-100"
               onClick={() =>
-                isEssential && onBackToDocuments
-                  ? onBackToDocuments()
-                  : undefined
+                onBackToDocuments ? onBackToDocuments() : undefined
               }
-              title={isEssential ? "Back to Documents" : "Go back"}
+              title="Back to Documents"
             >
               <svg
                 className="size-4 text-gray-600"
@@ -1394,10 +1102,9 @@ export default function WritiEditor({
               variant="ghost"
               size="sm"
               className="size-8 rounded-md p-0 hover:bg-gray-100"
-              disabled={isEssential}
             >
               <svg
-                className={`size-4 ${isEssential ? "text-gray-400" : "text-gray-600"}`}
+                className="size-4 text-gray-600"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1478,7 +1185,7 @@ export default function WritiEditor({
         {/* Right Section - Actions */}
         <div className="flex items-center space-x-1">
           {/* Sync Status Indicators */}
-          {enableOfflineFirst && !isEssential && (
+          {enableOfflineFirst && (
             <div className="mr-3 flex items-center space-x-2">
               {/* Offline/Online indicator */}
               <div className="flex items-center space-x-1">
@@ -1519,7 +1226,7 @@ export default function WritiEditor({
 
           {/* Edited Badge */}
           <span className="mr-4 text-sm font-medium text-gray-500">
-            {isEssential
+            {currentPage.id.startsWith("essential-")
               ? "Essential"
               : `Edited ${new Date(currentPage.updatedAt).toLocaleDateString(
                   "en-US",
@@ -1764,7 +1471,7 @@ export default function WritiEditor({
           {/* Content Area with proper spacing and alignment */}
           <div className="mt-4">
             {/* Blocks Content */}
-            {useBreadthFirstLoading && !isEssential ? (
+            {useBreadthFirstLoading ? (
               <VirtualBlockList
                 userId={userId}
                 pageId={currentPage?.id || null}
