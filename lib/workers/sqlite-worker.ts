@@ -50,6 +50,8 @@ class SQLiteWorker {
   private db: any = null
   private SQL: any = null
   private isInitialized = false
+  private dbPath: string = ""
+  private useOPFS = true
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return
@@ -58,10 +60,12 @@ class SQLiteWorker {
       console.log("🚀 Phase 1: Initializing absurd-sql OPFS database...")
 
       // Import SQL.js dynamically - use the @jlongster fork that supports FS
+      console.log("🔍 Step 1: Importing @jlongster/sql.js...")
       const { default: initSqlJs } = await import("@jlongster/sql.js")
+      console.log("✅ Step 1: @jlongster/sql.js imported successfully")
 
       // Initialize SQL.js with WASM and debugging
-      console.log("🔍 Initializing SQL.js...")
+      console.log("🔍 Step 2: Initializing SQL.js with WASM...")
       this.SQL = await initSqlJs({
         locateFile: (file: string) => {
           let path = file
@@ -73,17 +77,21 @@ class SQLiteWorker {
           return path
         }
       })
+      console.log("✅ Step 2: SQL.js WASM initialization completed")
 
       // Debug SQL.js initialization
+      console.log("🔍 Step 3: Checking SQL.js initialization...")
       console.log("🔍 SQL.js object:", this.SQL)
       console.log("🔍 SQL.js properties:", Object.keys(this.SQL || {}))
 
       // Verify SQL.js is properly initialized
       if (!this.SQL) {
-        throw new Error("Failed to initialize SQL.js")
+        throw new Error("Failed to initialize SQL.js - SQL object is null")
       }
+      console.log("✅ Step 3: SQL.js object validation passed")
 
       // Check for FS availability with more debugging
+      console.log("🔍 Step 4: Checking FS availability...")
       if (!this.SQL.FS) {
         console.error("❌ SQL.js FS not available")
         console.error("❌ Available properties:", Object.keys(this.SQL))
@@ -92,54 +100,201 @@ class SQLiteWorker {
         )
       }
 
-      console.log("✅ SQL.js initialized successfully with FS support")
+      console.log("✅ Step 4: SQL.js FS support confirmed")
       console.log("🔍 FS object:", this.SQL.FS)
       console.log("🔍 FS methods:", Object.keys(this.SQL.FS || {}))
 
       // Create OPFS-backed filesystem using absurd-sql
+      console.log("🔍 Step 5: Creating absurd-sql backend...")
       const backend = new IndexedDBBackend()
+      console.log("✅ Step 5: IndexedDBBackend created")
+
+      console.log("🔍 Step 6: Creating SQLiteFS...")
       const sqliteFS = new SQLiteFS(this.SQL.FS, backend)
+      console.log("✅ Step 6: SQLiteFS created")
 
       // Verify mount directory doesn't already exist
+      console.log("🔍 Step 7: Preparing mount directory...")
       try {
         this.SQL.FS.rmdir("/opfs")
+        console.log("🔧 Removed existing /opfs directory")
       } catch (e) {
-        // Directory doesn't exist, which is fine
+        console.log("📁 No existing /opfs directory found (expected)")
       }
 
-      this.SQL.FS.mount(sqliteFS, {}, "/opfs")
-      console.log("✅ absurd-sql filesystem mounted at /opfs")
+      console.log("🔍 Step 8: Mounting SQLiteFS...")
+      let dbPath = "/opfs/writi-blocks.db"
+
+      try {
+        // First, ensure the mount point is clean
+        try {
+          this.SQL.FS.unmount("/opfs")
+          console.log("🔧 Unmounted existing /opfs filesystem")
+        } catch (e) {
+          console.log("📁 No existing /opfs mount found (expected)")
+        }
+
+        // Create the mount point directory if it doesn't exist
+        try {
+          this.SQL.FS.mkdir("/opfs")
+          console.log("📁 Created /opfs directory")
+        } catch (e) {
+          console.log(
+            "📁 /opfs directory already exists or creation failed:",
+            e.message
+          )
+        }
+
+        // Now mount the filesystem
+        this.SQL.FS.mount(sqliteFS, {}, "/opfs")
+        console.log("✅ Step 8: absurd-sql filesystem mounted at /opfs")
+      } catch (mountError) {
+        console.error("❌ Step 8 Mount Error:", mountError)
+        console.error("❌ Mount Error Details:", {
+          message: mountError.message,
+          name: mountError.name,
+          stack: mountError.stack
+        })
+
+        // Try alternative mount path
+        console.log("🔄 Attempting alternative mount path...")
+        try {
+          const altPath = "/tmp/opfs"
+          this.SQL.FS.mkdir("/tmp")
+          this.SQL.FS.mount(sqliteFS, {}, altPath)
+          console.log("✅ Step 8: Alternative mount successful at", altPath)
+          // Update dbPath to use alternative location
+          dbPath = altPath + "/writi-blocks.db"
+        } catch (altError) {
+          console.error("❌ Alternative mount also failed:", altError)
+          console.log(
+            "🔄 Falling back to in-memory database (no OPFS persistence)"
+          )
+
+          // Fallback: Use in-memory database without OPFS
+          dbPath = ":memory:"
+          this.useOPFS = false
+          console.log(
+            "⚠️  Using in-memory fallback - data will not persist between sessions"
+          )
+        }
+      }
+
+      // Store the dbPath for later use
+      this.dbPath = dbPath
 
       // Open or create database in OPFS
-      const dbPath = "/opfs/writi-blocks.db"
+      console.log("🔍 Step 9: Opening/creating database at:", dbPath)
 
       try {
         // Try to open existing database from OPFS
+        console.log("🔍 Attempting to open existing database...")
+
+        if (dbPath === ":memory:") {
+          // For in-memory, always create new
+          throw new Error("Using in-memory mode, skip file opening")
+        }
+
+        // Check if file exists before trying to open
+        try {
+          const fileExists = this.SQL.FS.stat(dbPath)
+          console.log("📁 Database file exists:", fileExists)
+        } catch (statError) {
+          console.log("📁 Database file doesn't exist yet")
+          throw new Error("File doesn't exist, will create new")
+        }
+
         this.db = new this.SQL.Database(dbPath)
-        console.log("✅ Opened existing OPFS database:", dbPath)
+        console.log("✅ Step 9: Opened existing OPFS database:", dbPath)
       } catch (error) {
         console.log("📝 No existing database found, creating new one...")
-        // Create new database in memory first
-        this.db = new this.SQL.Database()
-        console.log(
-          "✅ Created new in-memory database, will save to OPFS after setup"
-        )
+        console.log("🔍 Step 9b: Creating new database...")
+        console.log("🔍 Error details:", error.message)
+
+        try {
+          // Always create in-memory first, then save to file if needed
+          console.log("🔍 Creating in-memory database...")
+          this.db = new this.SQL.Database()
+          console.log("✅ In-memory database created successfully")
+
+          // Verify database was created successfully
+          if (!this.db) {
+            throw new Error("Database creation returned null")
+          }
+
+          console.log("🔍 Database object properties:", Object.keys(this.db))
+
+          // Test basic functionality
+          console.log("🔍 Testing basic database functionality...")
+          const testQuery = this.db.exec("SELECT 'test' as result")
+          console.log("✅ Basic database test successful:", testQuery)
+        } catch (createError) {
+          console.error("❌ Failed to create database:", createError)
+          console.error("❌ SQL.js Database constructor error:", {
+            message: createError.message,
+            name: createError.name,
+            stack: createError.stack
+          })
+          throw new Error(`Database creation failed: ${createError.message}`)
+        }
       }
 
       // Set optimized settings for performance
-      this.db.exec(`
-        PRAGMA journal_mode=WAL;
-        PRAGMA synchronous=NORMAL;
-        PRAGMA cache_size=-8192;
-        PRAGMA temp_store=MEMORY;
-        PRAGMA mmap_size=268435456;
-      `)
+      console.log("🔍 Step 10: Setting database performance options...")
+
+      try {
+        // Verify database is ready for operations
+        console.log("🔍 Testing database with simple query...")
+        const testResult = this.db.exec("SELECT 1 as test")
+        console.log("✅ Database test query successful:", testResult)
+
+        // Apply performance settings one by one with error checking
+        console.log("🔍 Setting PRAGMA journal_mode=WAL...")
+        this.db.exec("PRAGMA journal_mode=WAL;")
+
+        console.log("🔍 Setting PRAGMA synchronous=NORMAL...")
+        this.db.exec("PRAGMA synchronous=NORMAL;")
+
+        console.log("🔍 Setting PRAGMA cache_size=-8192...")
+        this.db.exec("PRAGMA cache_size=-8192;")
+
+        console.log("🔍 Setting PRAGMA temp_store=MEMORY...")
+        this.db.exec("PRAGMA temp_store=MEMORY;")
+
+        // Skip mmap for in-memory databases
+        if (dbPath !== ":memory:") {
+          console.log("🔍 Setting PRAGMA mmap_size=268435456...")
+          this.db.exec("PRAGMA mmap_size=268435456;")
+        } else {
+          console.log("📝 Skipping mmap_size for in-memory database")
+        }
+
+        console.log("✅ Step 10: Database performance settings applied")
+      } catch (pragmaError) {
+        console.error("❌ Error setting PRAGMA options:", pragmaError)
+        console.error("❌ PRAGMA Error Details:", {
+          message: pragmaError.message,
+          name: pragmaError.name
+        })
+        // Continue anyway - PRAGMA failures shouldn't prevent initialization
+        console.log("⚠️  Continuing initialization despite PRAGMA failures")
+      }
 
       // Initialize database schema
+      console.log("🔍 Step 11: Creating database tables...")
       await this.createTables()
+      console.log("✅ Step 11: Database schema created")
 
       // Save to OPFS
-      this.saveToOPFS()
+      console.log("🔍 Step 12: Saving initial database to OPFS...")
+      try {
+        this.saveToOPFS()
+        console.log("✅ Step 12: Database saved to OPFS")
+      } catch (saveError) {
+        console.error("❌ Error saving to OPFS:", saveError)
+        console.log("⚠️  Continuing with in-memory database only")
+        this.useOPFS = false
+      }
 
       this.isInitialized = true
       console.log(
@@ -147,6 +302,9 @@ class SQLiteWorker {
       )
     } catch (error) {
       console.error("❌ Phase 1: Failed to initialize absurd-sql:", error)
+      console.error("❌ Error type:", error.constructor.name)
+      console.error("❌ Error message:", error.message)
+      console.error("❌ Error stack:", error.stack)
       throw error
     }
   }
@@ -627,11 +785,33 @@ class SQLiteWorker {
   }
 
   private saveToOPFS(): void {
+    if (!this.useOPFS || this.dbPath === ":memory:") {
+      // Skip saving for in-memory fallback
+      console.log("📝 Skipping OPFS save (in-memory mode)")
+      return
+    }
+
     try {
+      if (!this.db) {
+        throw new Error("No database to save")
+      }
+
+      console.log("🔍 Exporting database...")
       const uint8Array = this.db.export()
-      this.SQL.FS.writeFile("/opfs/writi-blocks.db", uint8Array)
+      console.log(`🔍 Database exported, size: ${uint8Array.length} bytes`)
+
+      console.log("🔍 Writing to OPFS path:", this.dbPath)
+      this.SQL.FS.writeFile(this.dbPath, uint8Array)
+      console.log("✅ Database successfully saved to OPFS")
     } catch (error) {
       console.error("❌ Error saving to OPFS:", error)
+      console.error("❌ Save error details:", {
+        message: error.message,
+        name: error.name,
+        dbPath: this.dbPath,
+        useOPFS: this.useOPFS
+      })
+      throw error
     }
   }
 
