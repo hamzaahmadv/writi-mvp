@@ -316,7 +316,10 @@ export class TransactionQueue {
     // Server actions are handled directly in useAbsurdSQLBlocks for better control
     // This worker just maintains the transaction record for tracking
     try {
-      console.log("Transaction logged for createBlock:", data)
+      // Reduce logging noise - only log for non-temp blocks
+      if (!data.blockId?.startsWith("temp_")) {
+        console.log("Transaction logged for createBlock:", data)
+      }
       // Always return true since actual sync is handled in the main thread
       return true
     } catch (error) {
@@ -327,7 +330,10 @@ export class TransactionQueue {
 
   private async executeUpdateBlock(data: any): Promise<boolean> {
     try {
-      console.log("Transaction logged for updateBlock:", data)
+      // Reduce logging noise - only log for non-temp blocks
+      if (!data.blockId?.startsWith("temp_")) {
+        console.log("Transaction logged for updateBlock:", data)
+      }
       return true
     } catch (error) {
       console.error("Error in executeUpdateBlock:", error)
@@ -337,7 +343,10 @@ export class TransactionQueue {
 
   private async executeDeleteBlock(data: any): Promise<boolean> {
     try {
-      console.log("Transaction logged for deleteBlock:", data)
+      // Reduce logging noise - only log for non-temp blocks
+      if (!data.blockId?.startsWith("temp_")) {
+        console.log("Transaction logged for deleteBlock:", data)
+      }
       return true
     } catch (error) {
       console.error("Error in executeDeleteBlock:", error)

@@ -115,6 +115,14 @@ export async function updateBlockAction(
       return { isSuccess: false, message: "User not authenticated" }
     }
 
+    // Skip update for temp blocks - they haven't been created in Supabase yet
+    if (id.startsWith("temp_")) {
+      return { 
+        isSuccess: false, 
+        message: "Cannot update temporary block - block not yet synced to database" 
+      }
+    }
+
     // First check if the block exists and belongs to the user
     const existingBlock = await db.query.blocks.findFirst({
       where: and(
@@ -178,6 +186,14 @@ export async function deleteBlockAction(id: string): Promise<ActionState<void>> 
     const { userId } = await auth()
     if (!userId) {
       return { isSuccess: false, message: "User not authenticated" }
+    }
+
+    // Skip delete for temp blocks - they haven't been created in Supabase yet
+    if (id.startsWith("temp_")) {
+      return { 
+        isSuccess: true, 
+        message: "Temporary block deleted locally only" 
+      }
     }
 
     // First check if the block exists and belongs to the user

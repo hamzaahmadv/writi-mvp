@@ -516,7 +516,10 @@ class SQLiteWorker {
         this.saveToOPFS()
       }
 
-      console.log(`💾 Upserted block ${block.id}`)
+      // Reduce logging for temp blocks during active editing
+      if (!block.id.startsWith("temp_")) {
+        console.log(`💾 Upserted block ${block.id}`)
+      }
     } catch (error) {
       console.error("❌ Error upserting block:", error)
       throw error

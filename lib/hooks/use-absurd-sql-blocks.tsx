@@ -508,21 +508,23 @@ export function useAbsurdSQLBlocks(
         await workerRef.current.upsertBlock(workerBlock)
       }
 
-      // 3. Background sync to Supabase
-      try {
-        const result = await updateBlockAction(id, {
-          type: updates.type,
-          content: updates.content,
-          properties: updates.props
-        })
+      // 3. Background sync to Supabase (skip for temp blocks)
+      if (!id.startsWith("temp_")) {
+        try {
+          const result = await updateBlockAction(id, {
+            type: updates.type,
+            content: updates.content,
+            properties: updates.props
+          })
 
-        if (!result.isSuccess) {
-          console.error("❌ Failed to sync block update:", result.message)
-        } else {
-          console.log(`✅ Synced block update ${id} to Supabase`)
+          if (!result.isSuccess) {
+            console.error("❌ Failed to sync block update:", result.message)
+          } else {
+            console.log(`✅ Synced block update ${id} to Supabase`)
+          }
+        } catch (syncError) {
+          console.error("❌ Error syncing block update:", syncError)
         }
-      } catch (syncError) {
-        console.error("❌ Error syncing block update:", syncError)
       }
     } catch (err) {
       console.error("❌ Error updating block:", err)
@@ -542,11 +544,15 @@ export function useAbsurdSQLBlocks(
       // 2. Delete from absurd-sql immediately
       await workerRef.current.deleteBlock(id)
 
-      // 3. Background sync to Supabase
+      // 3. Background sync to Supabase (handle temp blocks gracefully)
       try {
         const result = await deleteBlockAction(id)
         if (result.isSuccess) {
-          console.log(`✅ Synced block deletion ${id} to Supabase`)
+          if (id.startsWith("temp_")) {
+            console.log(`🗑️ Deleted temporary block ${id} locally`)
+          } else {
+            console.log(`✅ Synced block deletion ${id} to Supabase`)
+          }
         } else {
           console.error("❌ Failed to sync block deletion:", result.message)
         }
