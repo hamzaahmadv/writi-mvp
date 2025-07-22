@@ -170,11 +170,14 @@ export default function WritiEditor({
 
   // Sync blocks from database to local state
   useEffect(() => {
+    console.log(
+      `WritiEditor: Syncing ${currentBlocks.length} blocks for page ${currentPage?.id}`
+    )
     setEditorState(prev => ({
       ...prev,
       blocks: currentBlocks
     }))
-  }, [currentBlocks])
+  }, [currentBlocks, currentPage?.id])
 
   // Track user interactions to prevent unwanted auto-focus
   const [userInteracted, setUserInteracted] = useState(false)

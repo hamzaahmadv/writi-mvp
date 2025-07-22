@@ -1,20 +1,33 @@
 import * as Comlink from "comlink"
 import { SQLiteFS } from "absurd-sql"
-import IndexedDBBackend from "absurd-sql/dist/indexeddb-backend"
+import IndexedDBBackend from "absurd-sql/dist/indexeddb-main-thread"
 
-// Block type definition
+// Types for our block data structure (matching Phase 1 requirements)
 export interface Block {
   id: string
-  pageId: string
   type: string
-  content: string
-  parentId?: string
-  childrenIds?: string[]
-  createdAt: number
-  updatedAt: number
+  properties: Record<string, any>
+  content: string[]
+  parent: string | null
+  created_time: number
+  last_edited_time: number
+  last_edited_by?: string
+  page_id: string
 }
 
-// Transaction types for Phase 2
+interface BlockInsert {
+  id: string
+  type: string
+  properties: string // JSON stringified
+  content: string // JSON stringified
+  parent: string | null
+  created_time: number
+  last_edited_time: number
+  last_edited_by?: string
+  page_id: string
+}
+
+// Phase 2: Transaction types for sync & rollback
 export interface Transaction {
   id: string
   type: "create_block" | "update_block" | "delete_block" | "move_block"
@@ -28,6 +41,32 @@ export interface Transaction {
   user_id: string
   page_id?: string
 }
+
+export interface TransactionInsert {
+  id: string
+  type: string
+  data: string
+  retries: number
+  max_retries: number
+  status: string
+  created_at: number
+  updated_at: number
+  error_message?: string
+  user_id: string
+  page_id?: string
+}
+
+export type TransactionType =
+  | "create_block"
+  | "update_block"
+  | "delete_block"
+  | "move_block"
+export type TransactionStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled"
 
 export interface QueueStats {
   total_transactions: number
@@ -46,7 +85,7 @@ export interface SyncState {
   sync_in_progress: boolean
 }
 
-class SQLiteWorker {
+class AbsurdSQLiteDB {
   private db: any = null
   private SQL: any = null
   private isInitialized = false
@@ -55,13 +94,11 @@ class SQLiteWorker {
     if (this.isInitialized) return
 
     try {
-      console.log("🚀 Phase 1: Initializing absurd-sql OPFS database...")
+      console.log("Phase 1: Initializing absurd-sql with OPFS...")
 
-      // Import SQL.js dynamically
-      const { default: initSqlJs } = await import("sql.js")
-
-      // Initialize SQL.js with WASM
+      // Initialize SQL.js
       this.SQL = await initSqlJs({
+        // Use absurd-sql build
         locateFile: (file: string) => {
           if (file.endsWith(".wasm")) {
             return "/sqlite-wasm/sqlite3.wasm"
@@ -70,22 +107,22 @@ class SQLiteWorker {
         }
       })
 
-      // Create OPFS-backed filesystem using absurd-sql
+      // Create the IndexedDB-backed database using absurd-sql (OPFS-like persistence)
       const backend = new IndexedDBBackend()
       const sqliteFS = new SQLiteFS(this.SQL.FS, backend)
-      this.SQL.FS.mount(sqliteFS, {}, "/opfs")
+      this.SQL.FS.mount(sqliteFS, {}, "/absurd")
 
-      // Open or create database in OPFS
-      const dbPath = "/opfs/writi-blocks.db"
+      // Open or create the database with absurd-sql persistence
+      const dbPath = "/absurd/writi-blocks.db"
 
       try {
         // Try to open existing database
         this.db = new this.SQL.Database(dbPath)
-        console.log("✅ Opened existing OPFS database:", dbPath)
+        console.log("Opened existing absurd-sql database:", dbPath)
       } catch (error) {
         // Create new database if it doesn't exist
         this.db = new this.SQL.Database()
-        console.log("✅ Created new OPFS database:", dbPath)
+        console.log("Created new absurd-sql database:", dbPath)
       }
 
       // Set optimized settings for performance
@@ -97,15 +134,16 @@ class SQLiteWorker {
         PRAGMA mmap_size=268435456;
       `)
 
-      // Initialize database schema
+      // Create tables
       await this.createTables()
 
-      // Save to OPFS
-      this.saveToOPFS()
+      // Save database to absurd-sql persistent storage
+      const uint8Array = this.db.export()
+      this.SQL.FS.writeFile(dbPath, uint8Array)
 
       this.isInitialized = true
       console.log(
-        "✅ Phase 1: absurd-sql OPFS database initialized successfully"
+        "✅ Phase 1: absurd-sql database initialized successfully with IndexedDB persistence"
       )
     } catch (error) {
       console.error("❌ Phase 1: Failed to initialize absurd-sql:", error)
@@ -114,18 +152,18 @@ class SQLiteWorker {
   }
 
   private async createTables(): Promise<void> {
-    // Blocks table with the requested schema
     const createBlocksTable = `
       CREATE TABLE IF NOT EXISTS blocks (
         id TEXT PRIMARY KEY,
-        pageId TEXT NOT NULL,
         type TEXT NOT NULL,
-        content TEXT NOT NULL DEFAULT '',
-        parentId TEXT,
-        childrenIds TEXT DEFAULT '[]',
-        createdAt INTEGER NOT NULL,
-        updatedAt INTEGER NOT NULL,
-        FOREIGN KEY (parentId) REFERENCES blocks (id) ON DELETE SET NULL
+        properties TEXT NOT NULL DEFAULT '{}',
+        content TEXT NOT NULL DEFAULT '[]',
+        parent TEXT,
+        created_time INTEGER NOT NULL,
+        last_edited_time INTEGER NOT NULL,
+        last_edited_by TEXT,
+        page_id TEXT NOT NULL,
+        FOREIGN KEY (parent) REFERENCES blocks (id) ON DELETE CASCADE
       );
     `
 
@@ -159,11 +197,10 @@ class SQLiteWorker {
     `
 
     const createIndexes = `
-      CREATE INDEX IF NOT EXISTS idx_blocks_pageId ON blocks (pageId);
-      CREATE INDEX IF NOT EXISTS idx_blocks_parentId ON blocks (parentId);
-      CREATE INDEX IF NOT EXISTS idx_blocks_createdAt ON blocks (createdAt);
-      CREATE INDEX IF NOT EXISTS idx_blocks_updatedAt ON blocks (updatedAt);
-      CREATE INDEX IF NOT EXISTS idx_blocks_type ON blocks (type);
+      CREATE INDEX IF NOT EXISTS idx_blocks_page_id ON blocks (page_id);
+      CREATE INDEX IF NOT EXISTS idx_blocks_parent ON blocks (parent);
+      CREATE INDEX IF NOT EXISTS idx_blocks_created_time ON blocks (created_time);
+      CREATE INDEX IF NOT EXISTS idx_blocks_last_edited_time ON blocks (last_edited_time);
       
       CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions (status);
       CREATE INDEX IF NOT EXISTS idx_transactions_user_id ON transactions (user_id);
@@ -183,7 +220,9 @@ class SQLiteWorker {
       VALUES (1, 1, 0, 0, 0, 0);
     `)
 
-    console.log("✅ Phase 1: Database tables and indexes created")
+    console.log(
+      "✅ Phase 1: Database tables and indexes created with absurd-sql"
+    )
   }
 
   // Phase 1: Core block operations exposed via Comlink
@@ -194,32 +233,49 @@ class SQLiteWorker {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT id, pageId, type, content, parentId, childrenIds, createdAt, updatedAt
+        SELECT id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id
         FROM blocks 
-        WHERE pageId = ? 
-        ORDER BY createdAt ASC
+        WHERE page_id = ? 
+        ORDER BY created_time ASC
       `)
 
-      stmt.bind([pageId])
-      const blocks: Block[] = []
+      const result = stmt.getAsObject({ $pageId: pageId })
+      const rows: BlockInsert[] = []
 
+      // Execute and collect all results
       while (stmt.step()) {
-        const row = stmt.getAsObject()
-        blocks.push({
-          id: row.id as string,
-          pageId: row.pageId as string,
-          type: row.type as string,
-          content: row.content as string,
-          parentId: (row.parentId as string) || undefined,
-          childrenIds: JSON.parse((row.childrenIds as string) || "[]"),
-          createdAt: row.createdAt as number,
-          updatedAt: row.updatedAt as number
+        const row = stmt.getAsObject() as any
+        rows.push({
+          id: row.id,
+          type: row.type,
+          properties: row.properties,
+          content: row.content,
+          parent: row.parent,
+          created_time: row.created_time,
+          last_edited_time: row.last_edited_time,
+          last_edited_by: row.last_edited_by,
+          page_id: row.page_id
         })
       }
 
       stmt.free()
 
-      console.log(`📖 Retrieved ${blocks.length} blocks for page ${pageId}`)
+      // Parse JSON fields and convert to Block objects
+      const blocks: Block[] = rows.map(row => ({
+        id: row.id,
+        type: row.type,
+        properties: JSON.parse(row.properties || "{}"),
+        content: JSON.parse(row.content || "[]"),
+        parent: row.parent,
+        created_time: row.created_time,
+        last_edited_time: row.last_edited_time,
+        last_edited_by: row.last_edited_by,
+        page_id: row.page_id
+      }))
+
+      console.log(
+        `📖 Retrieved ${blocks.length} blocks for page ${pageId} (absurd-sql)`
+      )
       return blocks
     } catch (error) {
       console.error("❌ Error getting blocks for page:", error)
@@ -235,30 +291,31 @@ class SQLiteWorker {
     try {
       const stmt = this.db.prepare(`
         INSERT OR REPLACE INTO blocks 
-        (id, pageId, type, content, parentId, childrenIds, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
 
-      const childrenIdsJson = JSON.stringify(block.childrenIds || [])
-      const now = Date.now()
+      const propertiesJson = JSON.stringify(block.properties)
+      const contentJson = JSON.stringify(block.content)
 
       stmt.run([
         block.id,
-        block.pageId,
         block.type,
-        block.content,
-        block.parentId || null,
-        childrenIdsJson,
-        block.createdAt || now,
-        now
+        propertiesJson,
+        contentJson,
+        block.parent,
+        block.created_time,
+        block.last_edited_time,
+        block.last_edited_by || null,
+        block.page_id
       ])
 
       stmt.free()
 
-      // Save to OPFS
-      this.saveToOPFS()
+      // Save to absurd-sql persistent storage
+      this.saveToAbsurdSQL()
 
-      console.log(`💾 Upserted block ${block.id}`)
+      console.log(`💾 Upserted block ${block.id} (absurd-sql)`)
     } catch (error) {
       console.error("❌ Error upserting block:", error)
       throw error
@@ -275,10 +332,10 @@ class SQLiteWorker {
       stmt.run([blockId])
       stmt.free()
 
-      // Save to OPFS
-      this.saveToOPFS()
+      // Save to absurd-sql persistent storage
+      this.saveToAbsurdSQL()
 
-      console.log(`🗑️ Deleted block ${blockId}`)
+      console.log(`🗑️ Deleted block ${blockId} (absurd-sql)`)
     } catch (error) {
       console.error("❌ Error deleting block:", error)
       throw error
@@ -292,7 +349,7 @@ class SQLiteWorker {
 
     try {
       const stmt = this.db.prepare(`
-        SELECT id, pageId, type, content, parentId, childrenIds, createdAt, updatedAt
+        SELECT id, type, properties, content, parent, created_time, last_edited_time, last_edited_by, page_id
         FROM blocks 
         WHERE id = ?
       `)
@@ -300,18 +357,19 @@ class SQLiteWorker {
       stmt.bind([blockId])
 
       if (stmt.step()) {
-        const row = stmt.getAsObject()
+        const row = stmt.getAsObject() as any
         stmt.free()
 
         return {
-          id: row.id as string,
-          pageId: row.pageId as string,
-          type: row.type as string,
-          content: row.content as string,
-          parentId: (row.parentId as string) || undefined,
-          childrenIds: JSON.parse((row.childrenIds as string) || "[]"),
-          createdAt: row.createdAt as number,
-          updatedAt: row.updatedAt as number
+          id: row.id,
+          type: row.type,
+          properties: JSON.parse(row.properties || "{}"),
+          content: JSON.parse(row.content || "[]"),
+          parent: row.parent,
+          created_time: row.created_time,
+          last_edited_time: row.last_edited_time,
+          last_edited_by: row.last_edited_by,
+          page_id: row.page_id
         }
       }
 
@@ -329,14 +387,14 @@ class SQLiteWorker {
     }
 
     try {
-      const stmt = this.db.prepare("DELETE FROM blocks WHERE pageId = ?")
+      const stmt = this.db.prepare("DELETE FROM blocks WHERE page_id = ?")
       stmt.run([pageId])
       stmt.free()
 
-      // Save to OPFS
-      this.saveToOPFS()
+      // Save to absurd-sql persistent storage
+      this.saveToAbsurdSQL()
 
-      console.log(`🧹 Cleared all blocks for page ${pageId}`)
+      console.log(`🧹 Cleared all blocks for page ${pageId} (absurd-sql)`)
     } catch (error) {
       console.error("❌ Error clearing page:", error)
       throw error
@@ -375,8 +433,8 @@ class SQLiteWorker {
       stmt.free()
       await this.updatePendingCount()
 
-      // Save to OPFS
-      this.saveToOPFS()
+      // Save to absurd-sql persistent storage
+      this.saveToAbsurdSQL()
 
       console.log(
         `📋 Phase 2: Enqueued transaction ${transaction.id} (${transaction.type})`
@@ -402,26 +460,29 @@ class SQLiteWorker {
       `)
 
       stmt.bind([limit])
-      const transactions: Transaction[] = []
+      const rows: TransactionInsert[] = []
 
       while (stmt.step()) {
-        const row = stmt.getAsObject()
-        transactions.push({
-          id: row.id as string,
-          type: row.type as any,
-          data: JSON.parse(row.data as string),
-          retries: row.retries as number,
-          max_retries: row.max_retries as number,
-          status: row.status as any,
-          created_at: row.created_at as number,
-          updated_at: row.updated_at as number,
-          error_message: row.error_message as string,
-          user_id: row.user_id as string,
-          page_id: row.page_id as string
-        })
+        const row = stmt.getAsObject() as any
+        rows.push(row)
       }
 
       stmt.free()
+
+      // Convert to Transaction objects
+      const transactions: Transaction[] = rows.map(row => ({
+        id: row.id,
+        type: row.type as TransactionType,
+        data: JSON.parse(row.data),
+        retries: row.retries,
+        max_retries: row.max_retries,
+        status: row.status as TransactionStatus,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        error_message: row.error_message,
+        user_id: row.user_id,
+        page_id: row.page_id
+      }))
 
       console.log(`📤 Phase 2: Dequeued ${transactions.length} transactions`)
       return transactions
@@ -433,7 +494,7 @@ class SQLiteWorker {
 
   async updateTransactionStatus(
     transactionId: string,
-    status: Transaction["status"],
+    status: TransactionStatus,
     errorMessage?: string
   ): Promise<void> {
     if (!this.isInitialized) {
@@ -453,8 +514,8 @@ class SQLiteWorker {
       await this.updatePendingCount()
       await this.updateFailedCount()
 
-      // Save to OPFS
-      this.saveToOPFS()
+      // Save to absurd-sql persistent storage
+      this.saveToAbsurdSQL()
 
       console.log(
         `🔄 Phase 2: Updated transaction ${transactionId} status to ${status}`
@@ -482,15 +543,15 @@ class SQLiteWorker {
       `)
 
       stmt.step()
-      const row = stmt.getAsObject()
+      const row = stmt.getAsObject() as any
       stmt.free()
 
       return {
-        total_transactions: (row.total as number) || 0,
-        pending_transactions: (row.pending as number) || 0,
-        failed_transactions: (row.failed as number) || 0,
-        completed_transactions: (row.completed as number) || 0,
-        oldest_pending: (row.oldest_pending as number) || null,
+        total_transactions: row.total || 0,
+        pending_transactions: row.pending || 0,
+        failed_transactions: row.failed || 0,
+        completed_transactions: row.completed || 0,
+        oldest_pending: row.oldest_pending || null,
         sync_rate: 0 // Will be calculated by the sync manager
       }
     } catch (error) {
@@ -511,14 +572,14 @@ class SQLiteWorker {
       `)
 
       stmt.step()
-      const row = stmt.getAsObject()
+      const row = stmt.getAsObject() as any
       stmt.free()
 
       return {
         is_online: Boolean(row.is_online),
-        last_sync: (row.last_sync as number) || 0,
-        pending_count: (row.pending_count as number) || 0,
-        failed_count: (row.failed_count as number) || 0,
+        last_sync: row.last_sync || 0,
+        pending_count: row.pending_count || 0,
+        failed_count: row.failed_count || 0,
         sync_in_progress: Boolean(row.sync_in_progress)
       }
     } catch (error) {
@@ -548,8 +609,8 @@ class SQLiteWorker {
       stmt.run(values)
       stmt.free()
 
-      // Save to OPFS
-      this.saveToOPFS()
+      // Save to absurd-sql persistent storage
+      this.saveToAbsurdSQL()
 
       console.log("🔄 Phase 2: Updated sync state:", updates)
     } catch (error) {
@@ -588,19 +649,19 @@ class SQLiteWorker {
     }
   }
 
-  private saveToOPFS(): void {
+  private saveToAbsurdSQL(): void {
     try {
       const uint8Array = this.db.export()
-      this.SQL.FS.writeFile("/opfs/writi-blocks.db", uint8Array)
+      this.SQL.FS.writeFile("/absurd/writi-blocks.db", uint8Array)
     } catch (error) {
-      console.error("❌ Error saving to OPFS:", error)
+      console.error("❌ Error saving to absurd-sql storage:", error)
     }
   }
 
   async close(): Promise<void> {
     if (this.db) {
-      // Save final state to OPFS
-      this.saveToOPFS()
+      // Save final state to absurd-sql persistent storage
+      this.saveToAbsurdSQL()
 
       this.db.close()
       this.db = null
@@ -611,47 +672,48 @@ class SQLiteWorker {
 }
 
 // Create the worker API that will be exposed via Comlink
-const sqliteWorker = new SQLiteWorker()
+const absurdSQLiteDB = new AbsurdSQLiteDB()
 
 const workerAPI = {
   // Phase 1: Block operations
-  initialize: () => sqliteWorker.initialize(),
-  getBlocksPage: (pageId: string) => sqliteWorker.getBlocksPage(pageId),
-  upsertBlock: (block: Block) => sqliteWorker.upsertBlock(block),
-  deleteBlock: (blockId: string) => sqliteWorker.deleteBlock(blockId),
-  getBlock: (blockId: string) => sqliteWorker.getBlock(blockId),
-  clearPage: (pageId: string) => sqliteWorker.clearPage(pageId),
+  initialize: () => absurdSQLiteDB.initialize(),
+  getBlocksPage: (pageId: string) => absurdSQLiteDB.getBlocksPage(pageId),
+  upsertBlock: (block: Block) => absurdSQLiteDB.upsertBlock(block),
+  deleteBlock: (blockId: string) => absurdSQLiteDB.deleteBlock(blockId),
+  getBlock: (blockId: string) => absurdSQLiteDB.getBlock(blockId),
+  clearPage: (pageId: string) => absurdSQLiteDB.clearPage(pageId),
 
   // Phase 2: Transaction queue operations
   enqueueTransaction: (transaction: Transaction) =>
-    sqliteWorker.enqueueTransaction(transaction),
+    absurdSQLiteDB.enqueueTransaction(transaction),
   dequeueTransactions: (limit?: number) =>
-    sqliteWorker.dequeueTransactions(limit),
+    absurdSQLiteDB.dequeueTransactions(limit),
   updateTransactionStatus: (
     id: string,
-    status: Transaction["status"],
+    status: TransactionStatus,
     error?: string
-  ) => sqliteWorker.updateTransactionStatus(id, status, error),
-  getQueueStats: () => sqliteWorker.getQueueStats(),
-  getSyncState: () => sqliteWorker.getSyncState(),
+  ) => absurdSQLiteDB.updateTransactionStatus(id, status, error),
+  getQueueStats: () => absurdSQLiteDB.getQueueStats(),
+  getSyncState: () => absurdSQLiteDB.getSyncState(),
   updateSyncState: (updates: Partial<SyncState>) =>
-    sqliteWorker.updateSyncState(updates),
+    absurdSQLiteDB.updateSyncState(updates),
 
-  close: () => sqliteWorker.close()
+  close: () => absurdSQLiteDB.close()
 }
 
 // Set up global error handling for the worker
 self.addEventListener("error", event => {
-  console.error("🚨 SQLite Worker error:", event.error)
+  console.error("🚨 absurd-sql Worker error:", event.error)
   event.preventDefault()
 })
 
 self.addEventListener("unhandledrejection", event => {
-  console.error("🚨 SQLite Worker unhandled rejection:", event.reason)
+  console.error("🚨 absurd-sql Worker unhandled rejection:", event.reason)
   event.preventDefault()
 })
 
 // Expose the API via Comlink
 Comlink.expose(workerAPI)
 
-export type SQLiteWorkerAPI = typeof workerAPI
+export type AbsurdSQLiteWorkerAPI = typeof workerAPI
+export type { Transaction, TransactionStatus, SyncState, QueueStats, Block }

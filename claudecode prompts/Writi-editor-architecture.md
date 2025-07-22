@@ -86,7 +86,7 @@ Real-time collaboration	❌	Enables shared editing like Notion
 🚀 Execution Roadmap to Match Notion
 
 ✅ Phase 1: WASM SQLite + OPFS + Web Worker
-	•	Use absurd-sql, vulcan-sqlite, or sql.js
+	•	Use absurd-sql 
 	•	Store DB in OPFS inside Web Worker
 	•	Use Comlink to expose:
 	•	getBlocksPage(pageId)

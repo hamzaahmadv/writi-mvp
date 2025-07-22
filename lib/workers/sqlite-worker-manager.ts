@@ -19,10 +19,15 @@ export async function getSQLiteWorker(): Promise<SQLiteWorkerAPI> {
     // Wrap it with Comlink
     sqliteWorkerAPI = Comlink.wrap<SQLiteWorkerAPI>(workerInstance)
 
-    console.log("SQLite worker created and wrapped with Comlink")
+    console.log(
+      "🚀 Phase 1: absurd-sql SQLite worker created and wrapped with Comlink"
+    )
     return sqliteWorkerAPI
   } catch (error) {
-    console.error("Failed to create SQLite worker:", error)
+    console.error(
+      "❌ Phase 1: Failed to create absurd-sql SQLite worker:",
+      error
+    )
     throw error
   }
 }
@@ -38,7 +43,7 @@ export function closeSQLiteWorker(): void {
     workerInstance = null
   }
 
-  console.log("SQLite worker closed")
+  console.log("🔒 Phase 1: absurd-sql SQLite worker closed")
 }
 
 // Clean up on page unload

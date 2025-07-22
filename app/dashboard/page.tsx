@@ -62,15 +62,15 @@ export default function DashboardPage() {
   const setDefaultEssentials = () => {
     const defaultEssentials: EssentialPage[] = [
       {
-        id: "todo",
+        id: "essential-todo", // Fix: Use full essential ID to match essential-page-manager
         title: "To-do List / Planner",
-        emoji: "",
+        emoji: "📝",
         isBuiltIn: true
       },
       {
-        id: "getting-started",
+        id: "essential-getting-started", // Fix: Use full essential ID
         title: "Getting Started",
-        emoji: "",
+        emoji: "🚀",
         isBuiltIn: true
       }
     ]
@@ -176,7 +176,7 @@ export default function DashboardPage() {
       if (essential) {
         // Convert EssentialPage to SelectPage format for the editor
         return {
-          id: `essential-${essential.id}`,
+          id: essential.id, // Fix: Don't add extra "essential-" prefix, ID is already correct
           title: essential.title,
           emoji: essential.emoji,
           userId: userId || "",
@@ -278,7 +278,7 @@ export default function DashboardPage() {
             onBackToDocuments={() => setSelectedEssential(null)}
             isPreloaded={
               selectedEssential
-                ? preloadedEssentials.has(`essential-${selectedEssential}`)
+                ? preloadedEssentials.has(selectedEssential) // Fix: Use selectedEssential directly, no extra prefix
                 : true
             }
             useBreadthFirstLoading={false}

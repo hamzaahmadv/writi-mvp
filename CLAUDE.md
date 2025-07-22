@@ -29,11 +29,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Core Application Pattern
 Writi is a Notion-like block-based editor with AI capabilities built on Next.js. The architecture implements a **unified local-first storage strategy** inspired by Notion's smooth editing experience:
 
-**🧠 Unified Local-First Architecture (NEW)**
-- **ALL Pages**: SQLite WASM as primary data source for instant access
+**🧠 Unified Local-First Architecture (absurd-sql Implementation)**
+- **ALL Pages**: absurd-sql SQLite WASM with OPFS as primary data source for instant access
 - **Background Sync**: All pages sync to Supabase via transaction queue
 - **No Performance Gap**: Essential and Regular pages feel equally fast
 - **Offline-First**: Full offline capabilities with automatic sync when online
+- **Persistent Storage**: OPFS ensures data survives browser restarts
 
 ### Block-Based Content System
 The editor uses a hierarchical block structure with 11 block types (headings, paragraphs, lists, callouts, code, etc.). Each block can contain children, enabling nested content with markdown shortcuts and slash commands.
@@ -45,7 +46,8 @@ All user interactions update UI immediately using temporary IDs (`temp_${timesta
 
 #### 2. Hook-Based State Management
 - `usePage` - Page management with optimistic updates
-- `useLocalFirstBlocks` - **NEW**: Unified SQLite WASM storage for all pages
+- `useBlocks` - **NEW**: Unified absurd-sql WASM storage for all pages
+- `useAbsurdSQLBlocks` - **NEW**: Core absurd-sql implementation with OPFS
 - `useCurrentUser` - Authentication state
 - `useFavorites` - Favorites with instant UI updates
 - `useTransactionQueue` - Offline-first sync queue with rollback support
@@ -56,12 +58,12 @@ All user interactions update UI immediately using temporary IDs (`temp_${timesta
 #### 3. Event-Driven Communication
 Uses custom DOM events (`CustomEvent("favoritesChanged")`) for cross-component communication without prop drilling.
 
-#### 4. Unified Local-First Storage
-The `WritiEditor` component now uses SQLite WASM as the primary data source for ALL pages (essential and regular), eliminating performance gaps and providing a consistent editing experience.
+#### 4. Unified Local-First Storage (absurd-sql)
+The `WritiEditor` component now uses absurd-sql SQLite WASM with OPFS as the primary data source for ALL pages (essential and regular), eliminating performance gaps and providing a consistent editing experience with persistent storage.
 
 #### 5. Advanced Performance Features (Notion-inspired)
-- **WASM SQLite with OPFS**: Client-side database for instant operations
-- **Transaction Queue**: Offline-first editing with background sync
+- **absurd-sql SQLite with OPFS**: Client-side database for instant operations and persistent storage
+- **Transaction Queue**: Offline-first editing with background sync and rollback support
 - **Breadth-First Loading**: Load visible blocks first, children on-demand
 - **SharedWorker Coordination**: Multi-tab consistency with leader election
 - **Realtime Sync**: Collaborative editing via Supabase Realtime
@@ -89,12 +91,13 @@ All schemas follow consistent patterns:
 - Route-specific components go in `/_components`
 - Shared components go in `/components`
 
-### Unified Local-First Pages System
-- **ALL pages** use SQLite WASM as primary data source for instant access
+### Unified Local-First Pages System (absurd-sql)
+- **ALL pages** use absurd-sql SQLite WASM with OPFS as primary data source for instant access
 - **Essential pages** maintain their special status but sync to Supabase with proper UUID mapping
-- **Regular pages** preload from Supabase into SQLite on first access
+- **Regular pages** preload from Supabase into absurd-sql on first access
 - **Background sync** to Supabase via transaction queue for all page types
 - **No performance difference** between essential and regular pages
+- **Persistent storage** across browser sessions via OPFS
 
 ### AI Integration
 - `WritiAiPanel` runs independently from editor logic
@@ -143,7 +146,7 @@ All schemas follow consistent patterns:
 - **AI**: mem0ai
 - **Storage**: Supabase Storage
 - **Realtime**: Supabase Realtime (@supabase/supabase-js)
-- **Local DB**: SQLite WASM with OPFS (@sqlite.org/sqlite-wasm)
+- **Local DB**: absurd-sql SQLite WASM with OPFS (absurd-sql + sql.js)
 - **Workers**: Web Workers + SharedWorker with Comlink
 
 ## Core Files & Utilities
@@ -151,18 +154,21 @@ All schemas follow consistent patterns:
 ### Key Entry Points
 - `app/dashboard/page.tsx` - Main dashboard with three-panel layout
 - `app/dashboard/_components/writi-editor.tsx` - Primary block editor component (now with all 5 phases integrated)
-- `lib/hooks/use-local-first-blocks.tsx` - **NEW**: Unified SQLite WASM block storage for all pages
+- `lib/hooks/use-blocks.tsx` - **NEW**: Unified absurd-sql WASM block storage for all pages
+- `lib/hooks/use-absurd-sql-blocks.tsx` - **NEW**: Core absurd-sql implementation with OPFS
 - `lib/hooks/use-page.tsx` - Page management with optimistic updates
 - `lib/utils/essential-page-manager.ts` - **NEW**: Dynamic essential page creation and UUID mapping
 - `actions/db/` - All database operations (blocks, pages, favorites, comments)
 
 ### Performance & Sync Infrastructure
-- `lib/workers/sqlite-worker.ts` - SQLite WASM database in Web Worker
+- `lib/workers/sqlite-worker.ts` - **NEW**: absurd-sql SQLite WASM database in Web Worker with OPFS
+- `lib/workers/sqlite-worker-manager.ts` - **NEW**: absurd-sql worker manager with Comlink
 - `lib/workers/transaction-queue.ts` - Offline-first sync queue implementation
 - `lib/workers/tab-coordination-worker.ts` - SharedWorker for multi-tab sync
 - `lib/realtime/realtime-manager.ts` - Supabase Realtime integration
 - `lib/hooks/use-breadth-first-blocks.tsx` - Performance-optimized block loading
 - `components/blocks/virtual-block-list.tsx` - Virtual scrolling for large documents
+- `types/absurd-sql.d.ts` - **NEW**: TypeScript declarations for absurd-sql
 
 ### Essential Schemas
 - `db/schema/pages-schema.ts` - Page structure with icons and metadata
@@ -199,6 +205,7 @@ All schemas follow consistent patterns:
 - **Node.js**: Latest LTS (18+) recommended for Next.js 15 compatibility
 - **Package Manager**: NPM (uses package-lock.json)
 - **Database**: PostgreSQL via Supabase
+- **Browser**: Modern browser with OPFS support (Chrome 86+, Firefox 111+, Safari 15.2+)
 
 ### Initial Setup
 ```bash
@@ -269,7 +276,8 @@ MEM0_API_KEY=
 ### Editor Quirks
 - **Temp IDs**: New blocks use timestamp-based IDs until Supabase sync provides real UUIDs
 - **100ms Debounce**: Typing persistence has intentional delay for performance
-- **SQLite WASM Primary**: All pages render from local SQLite for instant performance
+- **absurd-sql Primary**: All pages render from local absurd-sql SQLite for instant performance
+- **OPFS Persistence**: Data survives browser restarts via Origin Private File System
 - **Essential Page UUIDs**: Dynamic UUID generation per user for Supabase sync compatibility
 - **IME Support**: Proper composition handling for international keyboards
 
@@ -287,19 +295,20 @@ MEM0_API_KEY=
 - **Optimistic Updates**: UI updates immediately, then syncs to backend
 - **Event-Driven Updates**: Uses CustomEvents for cross-component communication
 - **Memory Management**: Auto-cleanup of timeouts and event listeners
-- **SQLite WASM**: Local database runs in Web Worker for non-blocking operations
-- **Transaction Queue**: Batches operations for efficient sync
+- **absurd-sql WASM**: Local database runs in Web Worker for non-blocking operations with OPFS persistence
+- **Transaction Queue**: Batches operations for efficient sync with rollback support
 - **Virtual Scrolling**: Only renders visible blocks in viewport
 - **Breadth-First Loading**: Loads root blocks first, children on-demand
 
 ## Current Development Focus
 Based on recent commits and git status, active development areas include:
 - ✅ All 5 phases from Notion-inspired architecture implemented
-- ✅ SQLite WASM with OPFS for local-first editing
-- ✅ Transaction queue for offline-first sync
+- ✅ absurd-sql SQLite WASM with OPFS for local-first editing (Phase 1 & 2 Complete)
+- ✅ Transaction queue for offline-first sync with rollback support
 - ✅ Breadth-first loading for performance
 - ✅ SharedWorker multi-tab coordination
 - ✅ Realtime sync with Supabase
+- ✅ **NEW**: Replaced @sqlite.org/sqlite-wasm with absurd-sql for better OPFS support
 - Comments system implementation (in progress)
 - Cover image uploads and storage
 - Page header alignment improvements  
@@ -308,15 +317,17 @@ Based on recent commits and git status, active development areas include:
 
 ## Architecture Implementation Status
 
-### Phase 1: WASM SQLite + OPFS ✅
-- SQLite database running in Web Worker
-- OPFS for persistent storage
+### Phase 1: absurd-sql WASM SQLite + OPFS ✅
+- **absurd-sql** SQLite database running in Web Worker
+- OPFS for persistent storage via IndexedDBBackend
 - Comlink for seamless communication
+- **Block schema**: id, pageId, type, content, parentId, childrenIds, createdAt, updatedAt
 
 ### Phase 2: Transaction Queue ✅
 - Offline-first editing with background sync
 - Automatic rollback on failures
 - Network detection and retry logic
+- **Queue operations**: enqueue, dequeue, status updates, stats tracking
 
 ### Phase 3: Breadth-First Loading ✅
 - Load visible blocks first
@@ -350,10 +361,11 @@ In `app/dashboard/page.tsx`, the WritiEditor is configured with unified local-fi
 ### Configuration Priority and Conflict Resolution
 
 **IMPORTANT**: `storageMode` takes priority over `enableRealtimeSync`. When `storageMode="local-first"`:
-- Uses `useBlocks` (basic SQLite worker) instead of `useRealtimeBlocks` (coordinated SQLite)
+- Uses `useBlocks` (absurd-sql worker) instead of `useRealtimeBlocks` (coordinated SQLite)
 - Avoids tab coordination conflicts that cause "Only the leader tab can perform write operations" errors
 - Still enables transaction queue sync to Supabase in the background
 - Provides instant block creation and editing without coordination overhead
+- **NEW**: Uses absurd-sql with OPFS for persistent storage across browser sessions
 
 **Hook Selection Logic**:
 ```tsx
@@ -364,7 +376,8 @@ const blocksHook = shouldUseRealtimeBlocks ? realtimeBlocks : regularBlocks
 ### Feature Flags
 - **useBreadthFirstLoading**: Enables virtual scrolling and lazy loading
 - **enableRealtimeSync**: Enables Supabase Realtime for collaboration
-- **enableOfflineFirst**: Enables SQLite WASM and transaction queue
+- **enableOfflineFirst**: Enables absurd-sql SQLite WASM and transaction queue
+- **storageMode**: Set to "local-first" to use absurd-sql with OPFS
 
 ### Status Indicators
 The editor header now shows:

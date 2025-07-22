@@ -175,27 +175,37 @@ export function useLocalFirstBlocks(
 
   // Load blocks from SQLite (local-first approach)
   const loadBlocksFromSQLite = useCallback(async (): Promise<void> => {
-    if (
-      !userId ||
-      !pageId ||
-      !sqliteWorkerRef.current ||
-      !isInitializedRef.current
-    ) {
+    if (!userId || !pageId) {
       setBlocks([])
       setIsLoading(false)
       return
+    }
+
+    // Wait for SQLite worker initialization with timeout
+    let retries = 0
+    const maxRetries = 50 // 5 seconds max wait
+    while (!sqliteWorkerRef.current || !isInitializedRef.current) {
+      if (retries >= maxRetries) {
+        console.error("SQLite worker initialization timeout")
+        setError("Database initialization failed")
+        setIsLoading(false)
+        return
+      }
+      await new Promise(resolve => setTimeout(resolve, 100))
+      retries++
     }
 
     try {
       setIsLoading(true)
       setError(null)
 
+      console.log(`Loading blocks from SQLite for page: ${pageId}`)
       const sqliteBlocks = await sqliteWorkerRef.current.getBlocksPage(pageId)
       const editorBlocks = sqliteBlocks.map(sqliteBlockToEditorBlock)
 
       setBlocks(editorBlocks)
       console.log(
-        `Loaded ${editorBlocks.length} blocks from SQLite for page ${pageId}`
+        `✓ Loaded ${editorBlocks.length} blocks from SQLite for page ${pageId}`
       )
     } catch (err) {
       console.error("Error loading blocks from SQLite:", err)
