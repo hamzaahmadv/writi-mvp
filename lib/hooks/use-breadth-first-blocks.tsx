@@ -221,13 +221,13 @@ export function useBreadthFirstBlocks(
           for (const block of flatBlocks) {
             await sqliteClientRef.current.upsertBlock({
               id: block.id,
+              pageId: pageId!!,
               type: block.type,
-              properties: block.props || {},
-              content: [block.content],
-              parent: block.parentId || null,
-              created_time: Date.now(),
-              last_edited_time: Date.now(),
-              page_id: pageId!!
+              content: block.content,
+              parentId: block.parentId || undefined,
+              childrenIds: block.children?.map(child => child.id) || [],
+              createdAt: Date.now(),
+              updatedAt: Date.now()
             })
           }
         } catch (syncError) {
@@ -303,13 +303,13 @@ export function useBreadthFirstBlocks(
           for (const block of newFlatBlocks) {
             await sqliteClientRef.current.upsertBlock({
               id: block.id,
+              pageId: pageId!,
               type: block.type,
-              properties: block.props || {},
-              content: [block.content],
-              parent: block.parentId || null,
-              created_time: Date.now(),
-              last_edited_time: Date.now(),
-              page_id: pageId!
+              content: block.content,
+              parentId: block.parentId || undefined,
+              childrenIds: block.children?.map(child => child.id) || [],
+              createdAt: Date.now(),
+              updatedAt: Date.now()
             })
           }
         } catch (syncError) {
@@ -418,13 +418,14 @@ export function useBreadthFirstBlocks(
             for (const child of childFlatBlocks) {
               await sqliteClientRef.current.upsertBlock({
                 id: child.id,
+                pageId: pageId!!,
                 type: child.type,
-                properties: child.props || {},
-                content: [child.content],
-                parent: child.parentId || null,
-                created_time: Date.now(),
-                last_edited_time: Date.now(),
-                page_id: pageId!!
+                content: child.content,
+                parentId: child.parentId || undefined,
+                childrenIds:
+                  child.children?.map(grandchild => grandchild.id) || [],
+                createdAt: Date.now(),
+                updatedAt: Date.now()
               })
             }
           } catch (syncError) {

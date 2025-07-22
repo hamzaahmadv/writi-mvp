@@ -17,7 +17,12 @@ export interface Block {
 // Transaction types for Phase 2
 export interface Transaction {
   id: string
-  type: "create_block" | "update_block" | "delete_block" | "move_block"
+  type:
+    | "create_block"
+    | "update_block"
+    | "delete_block"
+    | "move_block"
+    | "update_block_order"
   data: any
   retries: number
   max_retries: number
@@ -52,6 +57,8 @@ class SQLiteWorker {
   private isInitialized = false
   private dbPath: string = ""
   private useOPFS = true
+  private currentPageId: string | null = null
+  private pageCache = new Map<string, Block[]>()
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return
@@ -272,10 +279,12 @@ class SQLiteWorker {
         console.log("✅ Step 10: Database performance settings applied")
       } catch (pragmaError) {
         console.error("❌ Error setting PRAGMA options:", pragmaError)
-        console.error("❌ PRAGMA Error Details:", {
-          message: pragmaError.message,
-          name: pragmaError.name
-        })
+        if (pragmaError instanceof Error) {
+          console.error("❌ PRAGMA Error Details:", {
+            message: pragmaError.message,
+            name: pragmaError.name
+          })
+        }
         // Continue anyway - PRAGMA failures shouldn't prevent initialization
         console.log("⚠️  Continuing initialization despite PRAGMA failures")
       }
@@ -302,9 +311,11 @@ class SQLiteWorker {
       )
     } catch (error) {
       console.error("❌ Phase 1: Failed to initialize absurd-sql:", error)
-      console.error("❌ Error type:", error.constructor.name)
-      console.error("❌ Error message:", error.message)
-      console.error("❌ Error stack:", error.stack)
+      if (error instanceof Error) {
+        console.error("❌ Error type:", error.constructor.name)
+        console.error("❌ Error message:", error.message)
+        console.error("❌ Error stack:", error.stack)
+      }
       throw error
     }
   }
@@ -382,10 +393,40 @@ class SQLiteWorker {
     console.log("✅ Phase 1: Database tables and indexes created")
   }
 
+  // Switch page context with cache invalidation
+  async switchToPage(pageId: string): Promise<void> {
+    if (this.currentPageId === pageId) {
+      return // Already on this page
+    }
+
+    console.log(`🔄 Switching from page ${this.currentPageId} to ${pageId}`)
+    this.currentPageId = pageId
+
+    // Clear old cache entries if we have too many (keep last 5 pages)
+    if (this.pageCache.size > 5) {
+      const keys = Array.from(this.pageCache.keys())
+      const oldestKey = keys[0]
+      this.pageCache.delete(oldestKey)
+      console.log(`🧹 Cleared cache for page ${oldestKey}`)
+    }
+  }
+
   // Phase 1: Core block operations exposed via Comlink
   async getBlocksPage(pageId: string): Promise<Block[]> {
     if (!this.isInitialized) {
       await this.initialize()
+    }
+
+    // Switch page context
+    await this.switchToPage(pageId)
+
+    // Check cache first
+    if (this.pageCache.has(pageId)) {
+      const cachedBlocks = this.pageCache.get(pageId)!
+      console.log(
+        `⚡ Retrieved ${cachedBlocks.length} blocks from cache for page ${pageId}`
+      )
+      return cachedBlocks
     }
 
     try {
@@ -415,7 +456,12 @@ class SQLiteWorker {
 
       stmt.free()
 
-      console.log(`📖 Retrieved ${blocks.length} blocks for page ${pageId}`)
+      // Cache the results
+      this.pageCache.set(pageId, blocks)
+
+      console.log(
+        `📖 Retrieved ${blocks.length} blocks for page ${pageId} from DB`
+      )
       return blocks
     } catch (error) {
       console.error("❌ Error getting blocks for page:", error)
@@ -451,8 +497,24 @@ class SQLiteWorker {
 
       stmt.free()
 
-      // Save to OPFS
-      this.saveToOPFS()
+      // Update cache
+      if (this.pageCache.has(block.pageId)) {
+        const cachedBlocks = this.pageCache.get(block.pageId)!
+        const blockIndex = cachedBlocks.findIndex(b => b.id === block.id)
+        if (blockIndex >= 0) {
+          cachedBlocks[blockIndex] = { ...block, updatedAt: now }
+        } else {
+          cachedBlocks.push({ ...block, updatedAt: now })
+          cachedBlocks.sort((a, b) => a.createdAt - b.createdAt)
+        }
+        this.pageCache.set(block.pageId, cachedBlocks)
+      }
+
+      // Save to OPFS (reduce frequency to improve performance)
+      if (Math.random() < 0.1) {
+        // Only save 10% of the time during active editing
+        this.saveToOPFS()
+      }
 
       console.log(`💾 Upserted block ${block.id}`)
     } catch (error) {
@@ -467,9 +529,26 @@ class SQLiteWorker {
     }
 
     try {
+      // Get block pageId before deletion for cache update
+      let pageId: string | null = null
+      const getStmt = this.db.prepare("SELECT pageId FROM blocks WHERE id = ?")
+      getStmt.bind([blockId])
+      if (getStmt.step()) {
+        const row = getStmt.getAsObject()
+        pageId = row.pageId as string
+      }
+      getStmt.free()
+
       const stmt = this.db.prepare("DELETE FROM blocks WHERE id = ?")
       stmt.run([blockId])
       stmt.free()
+
+      // Update cache
+      if (pageId && this.pageCache.has(pageId)) {
+        const cachedBlocks = this.pageCache.get(pageId)!
+        const updatedBlocks = cachedBlocks.filter(b => b.id !== blockId)
+        this.pageCache.set(pageId, updatedBlocks)
+      }
 
       // Save to OPFS
       this.saveToOPFS()
@@ -528,6 +607,9 @@ class SQLiteWorker {
       const stmt = this.db.prepare("DELETE FROM blocks WHERE pageId = ?")
       stmt.run([pageId])
       stmt.free()
+
+      // Clear cache for this page
+      this.pageCache.delete(pageId)
 
       // Save to OPFS
       this.saveToOPFS()
@@ -784,6 +866,117 @@ class SQLiteWorker {
     }
   }
 
+  // Missing methods required by transaction queue
+  async incrementTransactionRetries(transactionId: string): Promise<void> {
+    if (!this.isInitialized) {
+      await this.initialize()
+    }
+
+    try {
+      const stmt = this.db.prepare(`
+        UPDATE transactions 
+        SET retries = retries + 1, updated_at = ?
+        WHERE id = ?
+      `)
+
+      stmt.run([Date.now(), transactionId])
+      stmt.free()
+
+      // Save to OPFS
+      this.saveToOPFS()
+
+      console.log(`🔄 Incremented retries for transaction ${transactionId}`)
+    } catch (error) {
+      console.error("❌ Error incrementing transaction retries:", error)
+      throw error
+    }
+  }
+
+  async getFailedTransactions(): Promise<Transaction[]> {
+    if (!this.isInitialized) {
+      await this.initialize()
+    }
+
+    try {
+      const stmt = this.db.prepare(`
+        SELECT id, type, data, retries, max_retries, status, created_at, updated_at, error_message, user_id, page_id
+        FROM transactions 
+        WHERE status = 'failed'
+        ORDER BY updated_at DESC
+      `)
+
+      const transactions: Transaction[] = []
+
+      while (stmt.step()) {
+        const row = stmt.getAsObject()
+        transactions.push({
+          id: row.id as string,
+          type: row.type as any,
+          data: JSON.parse(row.data as string),
+          retries: row.retries as number,
+          max_retries: row.max_retries as number,
+          status: row.status as any,
+          created_at: row.created_at as number,
+          updated_at: row.updated_at as number,
+          error_message: row.error_message as string,
+          user_id: row.user_id as string,
+          page_id: row.page_id as string
+        })
+      }
+
+      stmt.free()
+
+      console.log(`📤 Retrieved ${transactions.length} failed transactions`)
+      return transactions
+    } catch (error) {
+      console.error("❌ Error getting failed transactions:", error)
+      throw error
+    }
+  }
+
+  async clearCompletedTransactions(olderThanDays: number = 7): Promise<number> {
+    if (!this.isInitialized) {
+      await this.initialize()
+    }
+
+    try {
+      const cutoffTime = Date.now() - olderThanDays * 24 * 60 * 60 * 1000
+
+      const stmt = this.db.prepare(`
+        DELETE FROM transactions 
+        WHERE status = 'completed' AND updated_at < ?
+      `)
+
+      const result = stmt.run([cutoffTime])
+      stmt.free()
+
+      await this.updatePendingCount()
+      await this.updateFailedCount()
+
+      // Save to OPFS
+      this.saveToOPFS()
+
+      console.log(
+        `🧹 Cleared ${result.changes} completed transactions older than ${olderThanDays} days`
+      )
+      return result.changes || 0
+    } catch (error) {
+      console.error("❌ Error clearing completed transactions:", error)
+      throw error
+    }
+  }
+
+  // Force save to OPFS (for critical operations)
+  async forceSave(): Promise<void> {
+    try {
+      this.saveToOPFS()
+      console.log("💾 Force saved database to OPFS")
+    } catch (error) {
+      console.error("❌ Error force saving to OPFS:", error)
+      throw error
+    }
+  }
+
   private saveToOPFS(): void {
     if (!this.useOPFS || this.dbPath === ":memory:") {
       // Skip saving for in-memory fallback
@@ -805,12 +998,14 @@ class SQLiteWorker {
       console.log("✅ Database successfully saved to OPFS")
     } catch (error) {
       console.error("❌ Error saving to OPFS:", error)
-      console.error("❌ Save error details:", {
-        message: error.message,
-        name: error.name,
-        dbPath: this.dbPath,
-        useOPFS: this.useOPFS
-      })
+      if (error instanceof Error) {
+        console.error("❌ Save error details:", {
+          message: error.message,
+          name: error.name,
+          dbPath: this.dbPath,
+          useOPFS: this.useOPFS
+        })
+      }
       throw error
     }
   }
@@ -834,6 +1029,7 @@ const sqliteWorker = new SQLiteWorker()
 const workerAPI = {
   // Phase 1: Block operations
   initialize: () => sqliteWorker.initialize(),
+  switchToPage: (pageId: string) => sqliteWorker.switchToPage(pageId),
   getBlocksPage: (pageId: string) => sqliteWorker.getBlocksPage(pageId),
   upsertBlock: (block: Block) => sqliteWorker.upsertBlock(block),
   deleteBlock: (blockId: string) => sqliteWorker.deleteBlock(blockId),
@@ -854,6 +1050,16 @@ const workerAPI = {
   getSyncState: () => sqliteWorker.getSyncState(),
   updateSyncState: (updates: Partial<SyncState>) =>
     sqliteWorker.updateSyncState(updates),
+
+  // Missing methods required by transaction queue
+  incrementTransactionRetries: (transactionId: string) =>
+    sqliteWorker.incrementTransactionRetries(transactionId),
+  getFailedTransactions: () => sqliteWorker.getFailedTransactions(),
+  clearCompletedTransactions: (olderThanDays?: number) =>
+    sqliteWorker.clearCompletedTransactions(olderThanDays),
+
+  // Utility methods
+  forceSave: () => sqliteWorker.forceSave(),
 
   close: () => sqliteWorker.close()
 }

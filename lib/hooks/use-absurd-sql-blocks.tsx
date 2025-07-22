@@ -111,6 +111,14 @@ export function useAbsurdSQLBlocks(
   const [error, setError] = useState<string | null>(null)
   const [isLocallyAvailable, setIsLocallyAvailable] = useState(false)
 
+  // Performance monitoring
+  const [performanceMetrics, setPerformanceMetrics] = useState({
+    pageLoadTime: 0,
+    blockCreationTime: 0,
+    cacheHitRate: 0,
+    totalOperations: 0
+  })
+
   const workerRef = useRef<SQLiteWorkerAPI | null>(null)
   const isInitializedRef = useRef(false)
 
@@ -254,6 +262,9 @@ export function useAbsurdSQLBlocks(
     }
   }, [userId, pageId, loadBlocksFromWorker])
 
+  // Track preloaded pages to prevent redundant calls
+  const preloadedPagesRef = useRef<Set<string>>(new Set())
+
   // Check cache and preload if needed
   const checkAndPreloadPage = useCallback(async (): Promise<void> => {
     if (!userId || !pageId || !workerRef.current || !isInitializedRef.current) {
@@ -264,19 +275,26 @@ export function useAbsurdSQLBlocks(
       // Check if we have any blocks for this page in absurd-sql
       const hasLocalCache = await checkLocalCache(pageId)
 
-      if (!hasLocalCache) {
+      if (!hasLocalCache && !preloadedPagesRef.current.has(pageId)) {
         console.log(
           `🔄 No local cache for ${pageId}, preloading from Supabase...`
         )
+        preloadedPagesRef.current.add(pageId) // Mark as being preloaded
         await preloadPageFromSupabase()
-      } else {
+      } else if (hasLocalCache) {
         console.log(`⚡ Using local cache for ${pageId}`)
+      } else {
+        console.log(
+          `📋 Page ${pageId} already preloaded, skipping Supabase call`
+        )
       }
 
       // Always load from absurd-sql (after potential preloading)
       await loadBlocksFromWorker()
     } catch (err) {
       console.error("❌ Error checking/preloading page:", err)
+      // Remove from preloaded set if failed to allow retry
+      preloadedPagesRef.current.delete(pageId)
       await loadBlocksFromWorker() // Fallback to worker load
     }
   }, [
@@ -287,10 +305,37 @@ export function useAbsurdSQLBlocks(
     loadBlocksFromWorker
   ])
 
-  // Load blocks when page changes
+  // Load blocks when page changes with improved cleanup
   useEffect(() => {
-    checkAndPreloadPage()
-  }, [checkAndPreloadPage])
+    if (!userId || !pageId) {
+      setBlocks([])
+      setIsLoading(false)
+      setError(null)
+      setIsLocallyAvailable(false)
+      return
+    }
+
+    // Performance monitoring: Track page load time
+    const pageLoadStart = performance.now()
+
+    // Immediately clear blocks when page changes to prevent flash of old content
+    setBlocks([])
+    setIsLoading(true)
+    setError(null)
+
+    checkAndPreloadPage().then(() => {
+      const pageLoadEnd = performance.now()
+      const pageLoadTime = pageLoadEnd - pageLoadStart
+
+      setPerformanceMetrics(prev => ({
+        ...prev,
+        pageLoadTime: Math.round(pageLoadTime),
+        totalOperations: prev.totalOperations + 1
+      }))
+
+      console.log(`📊 Page ${pageId} loaded in ${Math.round(pageLoadTime)}ms`)
+    })
+  }, [userId, pageId]) // Only depend on the actual values, not the callback
 
   // Create a new block
   const createBlock = async (
@@ -299,8 +344,8 @@ export function useAbsurdSQLBlocks(
   ): Promise<string | null> => {
     if (!userId || !pageId || !workerRef.current) return null
 
-    // Generate block ID
-    const blockId = `temp_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
+    // Generate optimized block ID with better entropy
+    const blockId = `temp_${Date.now()}_${crypto.getRandomValues(new Uint32Array(1))[0].toString(36)}`
 
     // Determine order
     let insertIndex = blocks.length
@@ -322,18 +367,31 @@ export function useAbsurdSQLBlocks(
     }
 
     try {
-      // 1. Update absurd-sql immediately (local-first)
-      const workerBlock = editorBlockToWorkerBlock(newBlock, pageId)
-      await workerRef.current.upsertBlock(workerBlock)
+      // Performance monitoring: Track block creation time
+      const createStart = performance.now()
 
-      // 2. Update local state optimistically
+      // 1. Update local state immediately for instant UI feedback
       setBlocks(prev => {
         const newBlocks = [...prev]
         newBlocks.splice(insertIndex, 0, newBlock)
         return newBlocks
       })
 
-      // 3. Phase 2: Enqueue transaction for background sync
+      // Track creation performance
+      const createEnd = performance.now()
+      const creationTime = createEnd - createStart
+
+      setPerformanceMetrics(prev => ({
+        ...prev,
+        blockCreationTime: Math.round(creationTime),
+        totalOperations: prev.totalOperations + 1
+      }))
+
+      // 2. Update absurd-sql in parallel (don't await for faster UX)
+      const workerBlock = editorBlockToWorkerBlock(newBlock, pageId)
+      const upsertPromise = workerRef.current.upsertBlock(workerBlock)
+
+      // 3. Phase 2: Enqueue transaction for background sync (parallel)
       const transaction = {
         id: `create_${blockId}_${Date.now()}`,
         type: "create_block" as const,
@@ -355,57 +413,72 @@ export function useAbsurdSQLBlocks(
         page_id: pageId || undefined
       }
 
-      await workerRef.current.enqueueTransaction(transaction)
-      console.log(
-        `📋 Phase 2: Enqueued create transaction for block ${blockId}`
-      )
+      const transactionPromise =
+        workerRef.current.enqueueTransaction(transaction)
 
-      // 4. Background sync to Supabase
-      try {
-        const databasePageId = await convertPageIdForDatabase(pageId, userId)
+      // 4. Background sync to Supabase (no await - fire and forget for speed)
+      Promise.all([upsertPromise, transactionPromise])
+        .then(async () => {
+          try {
+            const databasePageId = await convertPageIdForDatabase(
+              pageId,
+              userId
+            )
 
-        const result = await createBlockAction({
-          userId,
-          pageId: databasePageId,
-          parentId: null,
-          type,
-          content: "",
-          properties: newBlock.props || {},
-          order: insertIndex
+            const result = await createBlockAction({
+              userId,
+              pageId: databasePageId,
+              parentId: null,
+              type,
+              content: "",
+              properties: newBlock.props || {},
+              order: insertIndex
+            })
+
+            if (result.isSuccess) {
+              const realBlock = dbBlockToEditorBlock(result.data)
+              const updatedWorkerBlock = editorBlockToWorkerBlock(
+                realBlock,
+                pageId
+              )
+              await workerRef.current!.upsertBlock(updatedWorkerBlock)
+
+              setBlocks(prev =>
+                prev.map(block => (block.id === blockId ? realBlock : block))
+              )
+
+              await workerRef.current!.updateTransactionStatus(
+                transaction.id,
+                "completed"
+              )
+              console.log(`✅ Synced block ${blockId} to Supabase`)
+            } else {
+              await workerRef.current!.updateTransactionStatus(
+                transaction.id,
+                "failed",
+                result.message
+              )
+              console.error(
+                "❌ Failed to sync block to Supabase:",
+                result.message
+              )
+            }
+          } catch (syncError) {
+            await workerRef.current!.updateTransactionStatus(
+              transaction.id,
+              "failed",
+              String(syncError)
+            )
+            console.error("❌ Error syncing block to Supabase:", syncError)
+          }
+        })
+        .catch(err => {
+          console.error("❌ Error in background block creation:", err)
         })
 
-        if (result.isSuccess) {
-          const realBlock = dbBlockToEditorBlock(result.data)
-          const updatedWorkerBlock = editorBlockToWorkerBlock(realBlock, pageId)
-          await workerRef.current.upsertBlock(updatedWorkerBlock)
-
-          setBlocks(prev =>
-            prev.map(block => (block.id === blockId ? realBlock : block))
-          )
-
-          await workerRef.current.updateTransactionStatus(
-            transaction.id,
-            "completed"
-          )
-          console.log(`✅ Synced block ${blockId} to Supabase`)
-          return realBlock.id
-        } else {
-          await workerRef.current.updateTransactionStatus(
-            transaction.id,
-            "failed",
-            result.message
-          )
-          console.error("❌ Failed to sync block to Supabase:", result.message)
-        }
-      } catch (syncError) {
-        await workerRef.current.updateTransactionStatus(
-          transaction.id,
-          "failed",
-          String(syncError)
-        )
-        console.error("❌ Error syncing block to Supabase:", syncError)
-      }
-
+      console.log(
+        `⚡ Created block ${blockId} instantly in ${Math.round(creationTime)}ms`
+      )
       return blockId
     } catch (err) {
       console.error("❌ Error creating block:", err)

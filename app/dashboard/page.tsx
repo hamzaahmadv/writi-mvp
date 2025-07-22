@@ -272,7 +272,6 @@ export default function DashboardPage() {
         {/* Main Editor Area */}
         <div className="flex min-w-0 flex-1 flex-col">
           <WritiEditor
-            key={`${selectedEssential || currentPage?.id || "loading"}`}
             currentPage={getDisplayPage()}
             onUpdatePage={handleUpdateEssentialPage}
             onBackToDocuments={() => setSelectedEssential(null)}

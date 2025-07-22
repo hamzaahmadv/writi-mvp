@@ -300,6 +300,8 @@ export class TransactionQueue {
           return await this.executeDeleteBlock(transaction.data)
         case "update_block_order":
           return await this.executeUpdateBlockOrder(transaction.data)
+        case "move_block":
+          return await this.executeMoveBlock(transaction.data)
         default:
           console.warn(`Unknown transaction type: ${transaction.type}`)
           return false
@@ -311,14 +313,12 @@ export class TransactionQueue {
   }
 
   private async executeCreateBlock(data: any): Promise<boolean> {
-    // For now, we'll simulate success since server actions don't work in Web Workers
-    // TODO: Implement server action delegation to main thread
+    // Server actions are handled directly in useAbsurdSQLBlocks for better control
+    // This worker just maintains the transaction record for tracking
     try {
-      console.log("Simulating createBlock server action:", data)
-      await new Promise(resolve =>
-        setTimeout(resolve, 100 + Math.random() * 200)
-      )
-      return Math.random() > 0.1 // 90% success rate for testing
+      console.log("Transaction logged for createBlock:", data)
+      // Always return true since actual sync is handled in the main thread
+      return true
     } catch (error) {
       console.error("Error in executeCreateBlock:", error)
       return false
@@ -327,11 +327,8 @@ export class TransactionQueue {
 
   private async executeUpdateBlock(data: any): Promise<boolean> {
     try {
-      console.log("Simulating updateBlock server action:", data)
-      await new Promise(resolve =>
-        setTimeout(resolve, 50 + Math.random() * 100)
-      )
-      return Math.random() > 0.05 // 95% success rate for testing
+      console.log("Transaction logged for updateBlock:", data)
+      return true
     } catch (error) {
       console.error("Error in executeUpdateBlock:", error)
       return false
@@ -340,11 +337,8 @@ export class TransactionQueue {
 
   private async executeDeleteBlock(data: any): Promise<boolean> {
     try {
-      console.log("Simulating deleteBlock server action:", data)
-      await new Promise(resolve =>
-        setTimeout(resolve, 50 + Math.random() * 100)
-      )
-      return Math.random() > 0.05 // 95% success rate for testing
+      console.log("Transaction logged for deleteBlock:", data)
+      return true
     } catch (error) {
       console.error("Error in executeDeleteBlock:", error)
       return false
@@ -353,13 +347,20 @@ export class TransactionQueue {
 
   private async executeUpdateBlockOrder(data: any): Promise<boolean> {
     try {
-      console.log("Simulating updateBlockOrder server action:", data)
-      await new Promise(resolve =>
-        setTimeout(resolve, 100 + Math.random() * 150)
-      )
-      return Math.random() > 0.1 // 90% success rate for testing
+      console.log("Transaction logged for updateBlockOrder:", data)
+      return true
     } catch (error) {
       console.error("Error in executeUpdateBlockOrder:", error)
+      return false
+    }
+  }
+
+  private async executeMoveBlock(data: any): Promise<boolean> {
+    try {
+      console.log("Transaction logged for moveBlock:", data)
+      return true
+    } catch (error) {
+      console.error("Error in executeMoveBlock:", error)
       return false
     }
   }

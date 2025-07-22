@@ -492,7 +492,7 @@ export function useUnifiedLocalFirstBlocks(
         created_at: Date.now(),
         updated_at: Date.now(),
         user_id: userId!,
-        page_id: pageId
+        page_id: pageId || undefined
       }
 
       await absurdWorkerRef.current.enqueueTransaction(transaction)
@@ -559,7 +559,7 @@ export function useUnifiedLocalFirstBlocks(
         created_at: Date.now(),
         updated_at: Date.now(),
         user_id: userId!,
-        page_id: pageId
+        page_id: pageId || undefined
       }
 
       await absurdWorkerRef.current.enqueueTransaction(transaction)

@@ -36,14 +36,11 @@ function sqliteBlockToEditorBlock(sqliteBlock: SQLiteBlock): Block {
   return {
     id: sqliteBlock.id,
     type: sqliteBlock.type as BlockType,
-    content: Array.isArray(sqliteBlock.content)
-      ? sqliteBlock.content.join("\n")
-      : "",
+    content: sqliteBlock.content || "",
     children: [], // Children handled separately
     props: {
-      ...sqliteBlock.properties,
-      createdAt: new Date(sqliteBlock.created_time).toISOString(),
-      updatedAt: new Date(sqliteBlock.last_edited_time).toISOString()
+      createdAt: new Date(sqliteBlock.createdAt || Date.now()).toISOString(),
+      updatedAt: new Date(sqliteBlock.updatedAt || Date.now()).toISOString()
     }
   }
 }
@@ -55,23 +52,17 @@ function editorBlockToSQLiteBlock(
   pageId: string,
   order: number
 ): SQLiteBlock {
-  const content =
-    typeof block.content === "string"
-      ? block.content.split("\n").filter(Boolean)
-      : []
-
   return {
     id: block.id,
+    pageId: pageId,
     type: block.type,
-    properties: block.props || {},
-    content,
-    parent: null, // Handle nesting later
-    created_time: block.props?.createdAt
+    content: block.content || "",
+    parentId: undefined, // Handle nesting later
+    childrenIds: block.children?.map(child => child.id) || [],
+    createdAt: block.props?.createdAt
       ? new Date(block.props.createdAt).getTime()
       : Date.now(),
-    last_edited_time: Date.now(),
-    last_edited_by: userId,
-    page_id: pageId
+    updatedAt: Date.now()
   }
 }
 
