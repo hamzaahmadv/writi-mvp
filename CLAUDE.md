@@ -340,11 +340,25 @@ In `app/dashboard/page.tsx`, the WritiEditor is configured with unified local-fi
 
 ```tsx
 <WritiEditor
-  storageMode="local-first"        // SQLite WASM for all pages
-  enableRealtimeSync={true}        // Collaborative editing
+  storageMode="local-first"        // SQLite WASM for all pages (takes priority)
+  enableRealtimeSync={false}       // Disabled for local-first to avoid coordination conflicts  
   enableOfflineFirst={true}        // Transaction queue sync
   useBreadthFirstLoading={false}   // Disabled for local-first mode
 />
+```
+
+### Configuration Priority and Conflict Resolution
+
+**IMPORTANT**: `storageMode` takes priority over `enableRealtimeSync`. When `storageMode="local-first"`:
+- Uses `useBlocks` (basic SQLite worker) instead of `useRealtimeBlocks` (coordinated SQLite)
+- Avoids tab coordination conflicts that cause "Only the leader tab can perform write operations" errors
+- Still enables transaction queue sync to Supabase in the background
+- Provides instant block creation and editing without coordination overhead
+
+**Hook Selection Logic**:
+```tsx
+const shouldUseRealtimeBlocks = enableRealtimeSync && storageMode !== "local-first"
+const blocksHook = shouldUseRealtimeBlocks ? realtimeBlocks : regularBlocks
 ```
 
 ### Feature Flags

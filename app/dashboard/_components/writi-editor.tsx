@@ -115,7 +115,11 @@ export default function WritiEditor({
   // Unified blocks management - uses SQLite WASM as primary data source for all pages
   const regularBlocks = useBlocks(userId, currentPage?.id || null)
 
-  // Blocks management - now unified using local-first SQLite approach
+  // Blocks management - prioritize storageMode over realtime sync
+  // In local-first mode, always use regularBlocks (basic SQLite) for instant performance
+  const shouldUseRealtimeBlocks =
+    enableRealtimeSync && storageMode !== "local-first"
+
   const {
     blocks,
     isLoading: blocksLoading,
@@ -124,7 +128,7 @@ export default function WritiEditor({
     updateBlock: updateBlockInDb,
     deleteBlock: deleteBlockInDb,
     moveBlock: moveBlockInDb
-  } = enableRealtimeSync ? realtimeBlocks : regularBlocks
+  } = shouldUseRealtimeBlocks ? realtimeBlocks : regularBlocks
 
   // Current blocks (now always from unified SQLite storage)
   const currentBlocks = blocks
@@ -154,6 +158,12 @@ export default function WritiEditor({
 
   // Icon picker state
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false)
+
+  // Error handling for coordination failures
+  const [coordinationError, setCoordinationError] = useState<string | null>(
+    null
+  )
+  const [fallbackMode, setFallbackMode] = useState(false)
 
   // Cover picker state
   const [isCoverPickerOpen, setIsCoverPickerOpen] = useState(false)
@@ -410,6 +420,19 @@ export default function WritiEditor({
           return newBlockId
         } catch (error) {
           console.error("Failed to create block:", error)
+
+          // Handle TabCoordinationError specifically
+          if (
+            error instanceof Error &&
+            error.message.includes("TabCoordination")
+          ) {
+            setCoordinationError(
+              "Tab coordination failed. Switching to single-tab mode..."
+            )
+            setFallbackMode(true)
+            console.warn("Switching to fallback mode due to coordination error")
+          }
+
           return null
         }
       },
@@ -419,7 +442,9 @@ export default function WritiEditor({
         createBlockInDb,
         enableOfflineFirst,
         enqueueTransaction,
-        broadcastSync
+        broadcastSync,
+        setCoordinationError,
+        setFallbackMode
       ]
     ),
 
@@ -452,6 +477,18 @@ export default function WritiEditor({
           }
         } catch (error) {
           console.error("Failed to update block:", error)
+
+          // Handle TabCoordinationError specifically
+          if (
+            error instanceof Error &&
+            error.message.includes("TabCoordination")
+          ) {
+            setCoordinationError(
+              "Tab coordination failed. Switching to single-tab mode..."
+            )
+            setFallbackMode(true)
+            console.warn("Switching to fallback mode due to coordination error")
+          }
         }
       },
       [
@@ -460,7 +497,9 @@ export default function WritiEditor({
         enqueueTransaction,
         broadcastSync,
         currentPage,
-        userId
+        userId,
+        setCoordinationError,
+        setFallbackMode
       ]
     ),
 
@@ -499,6 +538,18 @@ export default function WritiEditor({
           }))
         } catch (error) {
           console.error("Failed to delete block:", error)
+
+          // Handle TabCoordinationError specifically
+          if (
+            error instanceof Error &&
+            error.message.includes("TabCoordination")
+          ) {
+            setCoordinationError(
+              "Tab coordination failed. Switching to single-tab mode..."
+            )
+            setFallbackMode(true)
+            console.warn("Switching to fallback mode due to coordination error")
+          }
         }
       },
       [
@@ -507,7 +558,9 @@ export default function WritiEditor({
         enqueueTransaction,
         broadcastSync,
         currentPage,
-        userId
+        userId,
+        setCoordinationError,
+        setFallbackMode
       ]
     ),
 
@@ -1017,6 +1070,30 @@ export default function WritiEditor({
           <AlertCircle className="size-4" />
           <AlertDescription>{blocksError}</AlertDescription>
         </Alert>
+      </div>
+    )
+  }
+
+  // Coordination error warning (non-blocking)
+  if (coordinationError && !fallbackMode) {
+    return (
+      <div className="p-8">
+        <Alert className="mb-4">
+          <AlertCircle className="size-4" />
+          <AlertDescription>
+            {coordinationError} The editor will continue to work in single-tab
+            mode.
+          </AlertDescription>
+        </Alert>
+        <Button
+          onClick={() => {
+            setCoordinationError(null)
+            setFallbackMode(true)
+          }}
+          className="mt-2"
+        >
+          Continue in Single-Tab Mode
+        </Button>
       </div>
     )
   }

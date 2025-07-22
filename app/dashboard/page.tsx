@@ -283,8 +283,8 @@ export default function DashboardPage() {
             }
             useBreadthFirstLoading={false}
             storageMode="local-first"
-            enableRealtimeSync={true}
-            enableOfflineFirst={true}
+            enableRealtimeSync={false} // Disabled for local-first mode to avoid coordination conflicts
+            enableOfflineFirst={true} // Keep for transaction queue sync
           />
         </div>
 
