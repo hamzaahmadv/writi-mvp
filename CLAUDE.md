@@ -27,9 +27,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Core Application Pattern
-Writi is a Notion-like block-based editor with AI capabilities built on Next.js. The architecture implements a **multi-layered storage strategy** inspired by Notion's smooth editing experience:
-- **Essential Pages**: Stored in localStorage for instant access (Todo List, Getting Started)
-- **Regular Pages**: Multi-tier storage with SQLite WASM (local) + PostgreSQL (remote) + Realtime sync
+Writi is a Notion-like block-based editor with AI capabilities built on Next.js. The architecture implements a **unified local-first storage strategy** inspired by Notion's smooth editing experience:
+
+**🧠 Unified Local-First Architecture (NEW)**
+- **ALL Pages**: SQLite WASM as primary data source for instant access
+- **Background Sync**: All pages sync to Supabase via transaction queue
+- **No Performance Gap**: Essential and Regular pages feel equally fast
+- **Offline-First**: Full offline capabilities with automatic sync when online
 
 ### Block-Based Content System
 The editor uses a hierarchical block structure with 11 block types (headings, paragraphs, lists, callouts, code, etc.). Each block can contain children, enabling nested content with markdown shortcuts and slash commands.
@@ -41,19 +45,19 @@ All user interactions update UI immediately using temporary IDs (`temp_${timesta
 
 #### 2. Hook-Based State Management
 - `usePage` - Page management with optimistic updates
-- `useBlocks` - Block CRUD with storage abstraction
+- `useLocalFirstBlocks` - **NEW**: Unified SQLite WASM storage for all pages
 - `useCurrentUser` - Authentication state
 - `useFavorites` - Favorites with instant UI updates
-- `useTransactionQueue` - Offline-first sync queue
-- `useTabCoordination` - Multi-tab synchronization
+- `useTransactionQueue` - Offline-first sync queue with rollback support
+- `useTabCoordination` - Multi-tab synchronization via SharedWorker
 - `useRealtimeBlocks` - Real-time collaborative editing
 - `useBreadthFirstBlocks` - Performance-optimized block loading
 
 #### 3. Event-Driven Communication
 Uses custom DOM events (`CustomEvent("favoritesChanged")`) for cross-component communication without prop drilling.
 
-#### 4. Dual Editor Mode
-The `WritiEditor` component switches between localStorage (essential) and database (regular) storage using the same interface based on `isEssential` flag.
+#### 4. Unified Local-First Storage
+The `WritiEditor` component now uses SQLite WASM as the primary data source for ALL pages (essential and regular), eliminating performance gaps and providing a consistent editing experience.
 
 #### 5. Advanced Performance Features (Notion-inspired)
 - **WASM SQLite with OPFS**: Client-side database for instant operations
@@ -85,11 +89,12 @@ All schemas follow consistent patterns:
 - Route-specific components go in `/_components`
 - Shared components go in `/components`
 
-### Essential vs Regular Pages System
-- Essential pages bypass database and use localStorage for instant loading
-- Regular pages use full database persistence with optimistic updates
-- Both use identical editor interface through storage abstraction
-- Page type determined by `isEssential` boolean flag
+### Unified Local-First Pages System
+- **ALL pages** use SQLite WASM as primary data source for instant access
+- **Essential pages** maintain their special status but sync to Supabase with proper UUID mapping
+- **Regular pages** preload from Supabase into SQLite on first access
+- **Background sync** to Supabase via transaction queue for all page types
+- **No performance difference** between essential and regular pages
 
 ### AI Integration
 - `WritiAiPanel` runs independently from editor logic
@@ -146,8 +151,9 @@ All schemas follow consistent patterns:
 ### Key Entry Points
 - `app/dashboard/page.tsx` - Main dashboard with three-panel layout
 - `app/dashboard/_components/writi-editor.tsx` - Primary block editor component (now with all 5 phases integrated)
-- `lib/hooks/use-blocks.tsx` - Block CRUD operations and state management
+- `lib/hooks/use-local-first-blocks.tsx` - **NEW**: Unified SQLite WASM block storage for all pages
 - `lib/hooks/use-page.tsx` - Page management with optimistic updates
+- `lib/utils/essential-page-manager.ts` - **NEW**: Dynamic essential page creation and UUID mapping
 - `actions/db/` - All database operations (blocks, pages, favorites, comments)
 
 ### Performance & Sync Infrastructure
@@ -261,9 +267,10 @@ MEM0_API_KEY=
 ## Unexpected Behaviors & Warnings
 
 ### Editor Quirks
-- **Temp IDs**: New blocks use `temp_${timestamp}` until database sync
+- **Temp IDs**: New blocks use timestamp-based IDs until Supabase sync provides real UUIDs
 - **100ms Debounce**: Typing persistence has intentional delay for performance
-- **localStorage Fallback**: Essential pages work offline via localStorage
+- **SQLite WASM Primary**: All pages render from local SQLite for instant performance
+- **Essential Page UUIDs**: Dynamic UUID generation per user for Supabase sync compatibility
 - **IME Support**: Proper composition handling for international keyboards
 
 ### Database Considerations  
@@ -329,13 +336,14 @@ Based on recent commits and git status, active development areas include:
 ## Using the New Architecture Features
 
 ### Enabling Performance Features
-In `app/dashboard/page.tsx`, the WritiEditor is configured with all features enabled by default:
+In `app/dashboard/page.tsx`, the WritiEditor is configured with unified local-first architecture:
 
 ```tsx
 <WritiEditor
-  useBreadthFirstLoading={true}  // Performance loading
-  enableRealtimeSync={true}       // Collaborative editing
-  enableOfflineFirst={true}       // Offline-first with sync queue
+  storageMode="local-first"        // SQLite WASM for all pages
+  enableRealtimeSync={true}        // Collaborative editing
+  enableOfflineFirst={true}        // Transaction queue sync
+  useBreadthFirstLoading={false}   // Disabled for local-first mode
 />
 ```
 

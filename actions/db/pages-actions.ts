@@ -14,11 +14,31 @@ import {
 } from "@/db/schema/pages-schema"
 import { ActionState } from "@/types"
 import { eq, asc } from "drizzle-orm"
+import { auth } from "@clerk/nextjs/server"
 
 export async function createPageAction(
   data: InsertPage
 ): Promise<ActionState<SelectPage>> {
   try {
+    // Authenticate user
+    const { userId } = await auth()
+    if (!userId) {
+      return { isSuccess: false, message: "User not authenticated" }
+    }
+
+    // Validate required fields
+    if (!data.userId || !data.title) {
+      return { 
+        isSuccess: false, 
+        message: "Missing required fields: userId or title" 
+      }
+    }
+
+    // Ensure authenticated user matches the data userId
+    if (data.userId !== userId) {
+      return { isSuccess: false, message: "User ID mismatch" }
+    }
+
     const [newPage] = await db.insert(pagesTable).values(data).returning()
     return {
       isSuccess: true,
@@ -35,6 +55,17 @@ export async function getPagesByUserAction(
   userId: string
 ): Promise<ActionState<SelectPage[]>> {
   try {
+    // Authenticate user
+    const { userId: authUserId } = await auth()
+    if (!authUserId) {
+      return { isSuccess: false, message: "User not authenticated" }
+    }
+
+    // Ensure authenticated user matches the requested userId
+    if (userId !== authUserId) {
+      return { isSuccess: false, message: "Access denied" }
+    }
+
     const pages = await db.query.pages.findMany({
       where: eq(pagesTable.userId, userId),
       orderBy: [asc(pagesTable.createdAt)]

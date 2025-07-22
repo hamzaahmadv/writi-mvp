@@ -82,19 +82,17 @@ class SQLiteDB {
       const isSecureContext = (self as any).isSecureContext
       if (!isSecureContext) {
         console.warn(
-          "Not in a secure context (HTTPS/localhost required for OPFS)"
+          "Not in a secure context (HTTPS/localhost required for OPFS). Using in-memory database."
         )
         useMemoryDb = true
       }
 
       // Check if OPFS is available
-      else if (this.sqlite3.opfs) {
+      else if (this.sqlite3.opfs && this.sqlite3.oo1.OpfsDb) {
         try {
           console.log("OPFS available, attempting to initialize...")
-          const opfs = this.sqlite3.opfs
-          await opfs.init()
 
-          // Create or open database file in OPFS
+          // Create or open database file in OPFS directly
           const dbName = "writi-blocks.db"
           this.db = new this.sqlite3.oo1.OpfsDb(dbName)
           console.log("Database opened with OPFS persistence")

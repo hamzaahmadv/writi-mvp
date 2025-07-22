@@ -99,7 +99,7 @@ export default function DashboardPage() {
       if (!userId) return null
 
       const newEssential: EssentialPage = {
-        id: `essential-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         title: title || "New Essential",
         emoji: emoji || "",
         isBuiltIn: false
@@ -131,33 +131,21 @@ export default function DashboardPage() {
       setEssentialPages(updatedPages)
       saveEssentialPages(updatedPages)
 
-      // Clear any stored blocks for this essential
-      if (userId) {
-        localStorage.removeItem(`essential-blocks-essential-${id}`)
-      }
-
       // If the deleted essential was selected, deselect it
       if (selectedEssential === id) {
         setSelectedEssential(null)
       }
     },
-    [essentialPages, userId, selectedEssential, saveEssentialPages]
+    [essentialPages, selectedEssential, saveEssentialPages]
   )
 
-  // Preload essential pages immediately for instant access
+  // Mark all essential pages as preloaded since SQLite handles them instantly
   useEffect(() => {
     if (userId && essentialPages.length > 0) {
       const preloaded = new Set<string>()
-
       essentialPages.forEach(essential => {
-        const stored = localStorage.getItem(
-          `essential-blocks-essential-${essential.id}`
-        )
-        if (stored) {
-          preloaded.add(`essential-${essential.id}`)
-        }
+        preloaded.add(essential.id)
       })
-
       setPreloadedEssentials(preloaded)
     }
   }, [userId, essentialPages])
@@ -176,9 +164,7 @@ export default function DashboardPage() {
     setSelectedEssential(essentialId)
 
     // Mark as preloaded for future quick access
-    setPreloadedEssentials(
-      prev => new Set([...prev, `essential-${essentialId}`])
-    )
+    setPreloadedEssentials(prev => new Set([...prev, essentialId]))
   }, [])
 
   // Get the current essential page or regular page
@@ -297,8 +283,8 @@ export default function DashboardPage() {
             }
             useBreadthFirstLoading={false}
             storageMode="local-first"
-            enableRealtimeSync={false}
-            enableOfflineFirst={false}
+            enableRealtimeSync={true}
+            enableOfflineFirst={true}
           />
         </div>
 

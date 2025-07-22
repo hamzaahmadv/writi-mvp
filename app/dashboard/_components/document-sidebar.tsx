@@ -588,8 +588,12 @@ export function DocumentSidebar({
             className="min-w-0 flex-1"
             onClick={() => {
               // Handle essential pages differently from regular pages
+              // Essential pages in search results have the "essential-" prefix in their ID
+              // We need to extract the actual essential ID
               if (page.id.startsWith("essential-")) {
-                const essentialId = page.id.replace("essential-", "")
+                // For built-in essentials like "essential-todo", pass "todo"
+                // For custom essentials like "essential-1234567890", pass "1234567890"
+                const essentialId = page.id.substring("essential-".length)
                 handleEssentialSelect(essentialId)
               } else {
                 handlePageSelect(page.id)

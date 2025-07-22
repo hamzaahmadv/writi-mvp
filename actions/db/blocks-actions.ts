@@ -14,12 +14,52 @@ import {
 } from "@/db/schema/blocks-schema"
 import { ActionState } from "@/types"
 import { eq, and, asc, isNull, desc, count, sql } from "drizzle-orm"
+import { auth } from "@clerk/nextjs/server"
+import { pagesTable } from "@/db/schema/pages-schema"
 
 export async function createBlockAction(
   data: InsertBlock
 ): Promise<ActionState<SelectBlock>> {
   try {
-    const [newBlock] = await db.insert(blocksTable).values(data).returning()
+    // Authenticate user
+    const { userId } = await auth()
+    if (!userId) {
+      return { isSuccess: false, message: "User not authenticated" }
+    }
+
+    // Validate required fields
+    if (!data.userId || !data.pageId || !data.type || data.order === undefined) {
+      return { 
+        isSuccess: false, 
+        message: "Missing required fields: userId, pageId, type, or order" 
+      }
+    }
+
+    // Ensure authenticated user matches the data userId
+    if (data.userId !== userId) {
+      return { isSuccess: false, message: "User ID mismatch" }
+    }
+
+    // Validate that the page exists and belongs to the user
+    const pageExists = await db.query.pages.findFirst({
+      where: and(
+        eq(pagesTable.id, data.pageId),
+        eq(pagesTable.userId, userId)
+      )
+    })
+
+    if (!pageExists) {
+      return { isSuccess: false, message: "Page does not exist or access denied" }
+    }
+
+    // Ensure properties is never null
+    const validatedData = {
+      ...data,
+      properties: data.properties || {},
+      content: data.content || ""
+    }
+
+    const [newBlock] = await db.insert(blocksTable).values(validatedData).returning()
     return {
       isSuccess: true,
       message: "Block created successfully",
@@ -27,7 +67,17 @@ export async function createBlockAction(
     }
   } catch (error) {
     console.error("Error creating block:", error)
-    return { isSuccess: false, message: "Failed to create block" }
+    
+    // Provide more specific error messages
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    if (errorMessage.includes("foreign key")) {
+      return { isSuccess: false, message: "Invalid page ID - page does not exist" }
+    }
+    if (errorMessage.includes("null value")) {
+      return { isSuccess: false, message: "Missing required field data" }
+    }
+    
+    return { isSuccess: false, message: `Failed to create block: ${errorMessage}` }
   }
 }
 
@@ -59,9 +109,33 @@ export async function updateBlockAction(
   data: Partial<InsertBlock>
 ): Promise<ActionState<SelectBlock>> {
   try {
+    // Authenticate user
+    const { userId } = await auth()
+    if (!userId) {
+      return { isSuccess: false, message: "User not authenticated" }
+    }
+
+    // First check if the block exists and belongs to the user
+    const existingBlock = await db.query.blocks.findFirst({
+      where: and(
+        eq(blocksTable.id, id),
+        eq(blocksTable.userId, userId)
+      )
+    })
+
+    if (!existingBlock) {
+      return { isSuccess: false, message: "Block not found or access denied" }
+    }
+
+    // Ensure properties is never null if provided
+    const validatedData = {
+      ...data,
+      properties: data.properties !== undefined ? (data.properties || {}) : undefined
+    }
+
     const [updatedBlock] = await db
       .update(blocksTable)
-      .set(data)
+      .set(validatedData)
       .where(eq(blocksTable.id, id))
       .returning()
 
@@ -72,7 +146,8 @@ export async function updateBlockAction(
     }
   } catch (error) {
     console.error("Error updating block:", error)
-    return { isSuccess: false, message: "Failed to update block" }
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    return { isSuccess: false, message: `Failed to update block: ${errorMessage}` }
   }
 }
 
@@ -99,6 +174,24 @@ export async function updateBlockOrderAction(
 
 export async function deleteBlockAction(id: string): Promise<ActionState<void>> {
   try {
+    // Authenticate user
+    const { userId } = await auth()
+    if (!userId) {
+      return { isSuccess: false, message: "User not authenticated" }
+    }
+
+    // First check if the block exists and belongs to the user
+    const existingBlock = await db.query.blocks.findFirst({
+      where: and(
+        eq(blocksTable.id, id),
+        eq(blocksTable.userId, userId)
+      )
+    })
+
+    if (!existingBlock) {
+      return { isSuccess: false, message: "Block not found or access denied" }
+    }
+
     await db.delete(blocksTable).where(eq(blocksTable.id, id))
     return {
       isSuccess: true,
@@ -107,7 +200,8 @@ export async function deleteBlockAction(id: string): Promise<ActionState<void>> 
     }
   } catch (error) {
     console.error("Error deleting block:", error)
-    return { isSuccess: false, message: "Failed to delete block" }
+    const errorMessage = error instanceof Error ? error.message : "Unknown error"
+    return { isSuccess: false, message: `Failed to delete block: ${errorMessage}` }
   }
 }
 

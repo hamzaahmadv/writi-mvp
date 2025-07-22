@@ -12,6 +12,7 @@ import {
 } from "@/actions/db/blocks-actions"
 import { getSQLiteWorker } from "@/lib/workers/sqlite-worker-manager"
 import type { SQLiteWorkerAPI } from "@/lib/workers/sqlite-worker"
+import { convertPageIdForDatabase } from "@/lib/utils/essential-page-manager"
 
 interface UseLocalFirstBlocksResult {
   blocks: Block[]
@@ -94,6 +95,51 @@ const isEssentialPage = (pageId: string): boolean => {
   return pageId.startsWith("essential-")
 }
 
+// Migrate localStorage blocks to SQLite (one-time migration)
+const migrateLocalStorageBlocks = async (
+  pageId: string,
+  userId: string,
+  sqliteWorker: SQLiteWorkerAPI
+): Promise<void> => {
+  try {
+    // Check if blocks already exist in SQLite for this page
+    const existingBlocks = await sqliteWorker.getBlocksPage(pageId)
+    if (existingBlocks.length > 0) {
+      // Blocks already migrated, skip
+      return
+    }
+
+    // Try to find localStorage blocks for this essential page
+    const localStorageKey = `essential-blocks-${pageId}`
+    const storedBlocks = localStorage.getItem(localStorageKey)
+
+    if (storedBlocks) {
+      console.log(`Migrating localStorage blocks for ${pageId} to SQLite...`)
+
+      try {
+        const parsedBlocks = JSON.parse(storedBlocks) as Block[]
+
+        // Convert and insert each block into SQLite
+        for (const block of parsedBlocks) {
+          const sqliteBlock = editorBlockToSQLiteBlock(block, userId, pageId)
+          await sqliteWorker.upsertBlock(sqliteBlock)
+        }
+
+        console.log(
+          `Migrated ${parsedBlocks.length} blocks from localStorage to SQLite`
+        )
+
+        // Remove the localStorage data after successful migration
+        localStorage.removeItem(localStorageKey)
+      } catch (parseError) {
+        console.error("Error parsing localStorage blocks:", parseError)
+      }
+    }
+  } catch (error) {
+    console.error("Error migrating localStorage blocks:", error)
+  }
+}
+
 export function useLocalFirstBlocks(
   userId: string | null,
   pageId: string | null
@@ -110,13 +156,17 @@ export function useLocalFirstBlocks(
     const initWorker = async () => {
       try {
         if (!sqliteWorkerRef.current) {
+          console.log("Initializing SQLite worker for local-first blocks...")
           sqliteWorkerRef.current = await getSQLiteWorker()
           await sqliteWorkerRef.current.initialize()
+          console.log("SQLite worker initialized successfully")
         }
         isInitializedRef.current = true
       } catch (err) {
         console.error("Failed to initialize SQLite worker:", err)
-        setError("Failed to initialize local database")
+        setError("Failed to initialize local database - data may not persist")
+        // Set initialized to true anyway to allow basic functionality
+        isInitializedRef.current = true
       }
     }
 
@@ -223,17 +273,23 @@ export function useLocalFirstBlocks(
       // Check if we have any blocks for this page in SQLite
       const existingBlocks = await sqliteWorkerRef.current.getBlocksPage(pageId)
 
-      if (
-        existingBlocks.length === 0 &&
-        !isEssentialPage(pageId) &&
-        isValidUUID(pageId)
-      ) {
-        // No blocks in SQLite and it's a regular page, preload from Supabase
-        await preloadPageFromSupabase()
-      } else {
-        // Load from SQLite
-        await loadBlocksFromSQLite()
+      if (existingBlocks.length === 0) {
+        // Check if this is an essential page and attempt migration
+        if (isEssentialPage(pageId)) {
+          // Try to migrate from localStorage before loading from SQLite
+          await migrateLocalStorageBlocks(
+            pageId,
+            userId,
+            sqliteWorkerRef.current
+          )
+        } else if (isValidUUID(pageId)) {
+          // No blocks in SQLite and it's a regular page, preload from Supabase
+          await preloadPageFromSupabase()
+        }
       }
+
+      // Always load from SQLite (after potential migration or preloading)
+      await loadBlocksFromSQLite()
     } catch (err) {
       console.error("Error checking/preloading page:", err)
       await loadBlocksFromSQLite() // Fallback to SQLite load
@@ -253,7 +309,7 @@ export function useLocalFirstBlocks(
     if (!userId || !pageId || !sqliteWorkerRef.current) return null
 
     // Generate block ID
-    const blockId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const blockId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
 
     // Determine order
     let insertIndex = blocks.length
@@ -286,42 +342,49 @@ export function useLocalFirstBlocks(
         return newBlocks
       })
 
-      // 3. For regular pages, sync to Supabase in background
-      if (!isEssentialPage(pageId) && isValidUUID(pageId)) {
-        try {
-          const result = await createBlockAction({
-            userId,
-            pageId,
-            parentId: null,
-            type,
-            content: "",
-            properties: newBlock.props,
-            order: insertIndex
-          })
-
-          if (result.isSuccess) {
-            // Update SQLite with the real block ID and data from Supabase
-            const realBlock = dbBlockToEditorBlock(result.data)
-            const updatedSQLiteBlock = editorBlockToSQLiteBlock(
-              realBlock,
-              userId,
-              pageId
-            )
-            await sqliteWorkerRef.current.upsertBlock(updatedSQLiteBlock)
-
-            // Update local state with real block
-            setBlocks(prev =>
-              prev.map(block => (block.id === blockId ? realBlock : block))
-            )
-
-            return realBlock.id
-          } else {
-            console.error("Failed to sync block to Supabase:", result.message)
-          }
-        } catch (syncError) {
-          console.error("Error syncing block to Supabase:", syncError)
-          // Block remains in SQLite, can be synced later
+      // 3. For all pages, sync to Supabase in background (unified local-first approach)
+      try {
+        // Validate data before sending to server
+        if (!userId || !pageId || !type) {
+          throw new Error("Missing required data for block creation")
         }
+
+        // Convert essential page ID to database UUID for Supabase sync
+        const databasePageId = await convertPageIdForDatabase(pageId, userId)
+
+        const result = await createBlockAction({
+          userId,
+          pageId: databasePageId,
+          parentId: null,
+          type,
+          content: "",
+          properties: newBlock.props || {},
+          order: insertIndex
+        })
+
+        if (result.isSuccess) {
+          // Update SQLite with the real block ID and data from Supabase
+          const realBlock = dbBlockToEditorBlock(result.data)
+          const updatedSQLiteBlock = editorBlockToSQLiteBlock(
+            realBlock,
+            userId,
+            pageId
+          )
+          await sqliteWorkerRef.current.upsertBlock(updatedSQLiteBlock)
+
+          // Update local state with real block
+          setBlocks(prev =>
+            prev.map(block => (block.id === blockId ? realBlock : block))
+          )
+
+          console.log(`Synced block ${blockId} to Supabase for page ${pageId}`)
+          return realBlock.id
+        } else {
+          console.error("Failed to sync block to Supabase:", result.message)
+        }
+      } catch (syncError) {
+        console.error("Error syncing block to Supabase:", syncError)
+        // Block remains in SQLite, can be synced later via transaction queue
       }
 
       return blockId
@@ -357,24 +420,27 @@ export function useLocalFirstBlocks(
         await sqliteWorkerRef.current.upsertBlock(sqliteBlock)
       }
 
-      // 3. For regular pages, sync to Supabase in background
-      if (!isEssentialPage(pageId!) && isValidUUID(pageId!)) {
-        try {
-          const result = await updateBlockAction(id, {
-            type: updates.type,
-            content: updates.content,
-            properties: updates.props
-          })
+      // 3. For all pages, sync to Supabase in background (unified local-first approach)
+      try {
+        const result = await updateBlockAction(id, {
+          type: updates.type,
+          content: updates.content,
+          properties: updates.props
+        })
 
-          if (!result.isSuccess) {
-            console.error(
-              "Failed to sync block update to Supabase:",
-              result.message
-            )
-          }
-        } catch (syncError) {
-          console.error("Error syncing block update to Supabase:", syncError)
+        if (!result.isSuccess) {
+          console.error(
+            "Failed to sync block update to Supabase:",
+            result.message
+          )
+        } else {
+          console.log(
+            `Synced block update ${id} to Supabase for page ${pageId}`
+          )
         }
+      } catch (syncError) {
+        console.error("Error syncing block update to Supabase:", syncError)
+        // Block update remains in SQLite, can be synced later via transaction queue
       }
     } catch (err) {
       console.error("Error updating block:", err)
@@ -395,19 +461,22 @@ export function useLocalFirstBlocks(
       // 2. Delete from SQLite immediately
       await sqliteWorkerRef.current.deleteBlock(id)
 
-      // 3. For regular pages, sync to Supabase in background
-      if (!isEssentialPage(pageId!) && isValidUUID(pageId!)) {
-        try {
-          const result = await deleteBlockAction(id)
-          if (!result.isSuccess) {
-            console.error(
-              "Failed to sync block deletion to Supabase:",
-              result.message
-            )
-          }
-        } catch (syncError) {
-          console.error("Error syncing block deletion to Supabase:", syncError)
+      // 3. For all pages, sync to Supabase in background (unified local-first approach)
+      try {
+        const result = await deleteBlockAction(id)
+        if (!result.isSuccess) {
+          console.error(
+            "Failed to sync block deletion to Supabase:",
+            result.message
+          )
+        } else {
+          console.log(
+            `Synced block deletion ${id} to Supabase for page ${pageId}`
+          )
         }
+      } catch (syncError) {
+        console.error("Error syncing block deletion to Supabase:", syncError)
+        // Block deletion remains in SQLite, can be synced later via transaction queue
       }
     } catch (err) {
       console.error("Error deleting block:", err)
