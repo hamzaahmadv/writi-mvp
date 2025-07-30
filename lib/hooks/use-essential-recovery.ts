@@ -15,6 +15,7 @@ export interface EssentialPage {
   id: string
   title: string
   emoji: string
+  coverImage?: string
   isBuiltIn: boolean
 }
 
@@ -40,6 +41,7 @@ export function useEssentialRecovery(userId: string | null) {
             id: dbPage.id.replace("essential-", ""), // Remove 'essential-' prefix
             title: dbPage.title,
             emoji: dbPage.emoji || "",
+            coverImage: dbPage.coverImage || undefined,
             isBuiltIn:
               dbPage.id.includes("todo") ||
               dbPage.id.includes("getting-started")

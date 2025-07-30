@@ -25,6 +25,7 @@ export interface SyncOperation {
   data?: {
     title?: string
     emoji?: string
+    coverImage?: string
     blocks?: Block[]
   }
   timestamp: number
@@ -45,6 +46,7 @@ const syncToSupabase = async (operation: SyncOperation) => {
             userId,
             title: data.title || "New Essential",
             emoji: data.emoji,
+            coverImage: data.coverImage,
             blocks: data.blocks || []
           }
 
@@ -210,12 +212,18 @@ export function useEssentialSync(userId: string | null) {
 
   // Sync essential page creation
   const syncPageCreate = useCallback(
-    (pageId: string, title: string, emoji?: string, blocks: Block[] = []) => {
+    (
+      pageId: string,
+      title: string,
+      emoji?: string,
+      blocks: Block[] = [],
+      coverImage?: string
+    ) => {
       debouncedSync({
         type: "create",
         id: pageId,
         userId: userId!,
-        data: { title, emoji, blocks }
+        data: { title, emoji, coverImage, blocks }
       })
     },
     [debouncedSync, userId]
@@ -225,7 +233,12 @@ export function useEssentialSync(userId: string | null) {
   const syncPageUpdate = useCallback(
     (
       pageId: string,
-      updates: { title?: string; emoji?: string; blocks?: Block[] }
+      updates: {
+        title?: string
+        emoji?: string
+        coverImage?: string
+        blocks?: Block[]
+      }
     ) => {
       debouncedSync({
         type: "update",
@@ -262,7 +275,8 @@ export function useEssentialSync(userId: string | null) {
       pageId: string,
       title: string,
       emoji?: string,
-      blocks: Block[] = []
+      blocks: Block[] = [],
+      coverImage?: string
     ) => {
       if (!userId || !isOnlineRef.current) return
 
@@ -273,7 +287,7 @@ export function useEssentialSync(userId: string | null) {
           type: "update",
           id: pageId,
           userId,
-          data: { title, emoji, blocks },
+          data: { title, emoji, coverImage, blocks },
           timestamp: Date.now(),
           retryCount: 0
         }

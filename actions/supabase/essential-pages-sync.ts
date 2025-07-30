@@ -18,6 +18,7 @@ export interface EssentialPageData {
   userId: string
   title: string
   emoji?: string
+  coverImage?: string
   blocks: Block[]
 }
 
@@ -38,6 +39,7 @@ export async function syncEssentialPageAction(data: EssentialPageData) {
           userId: data.userId,
           title: data.title,
           emoji: data.emoji || null,
+          coverImage: data.coverImage || null,
           blocks: data.blocks
         })
         .onConflictDoUpdate({
@@ -45,6 +47,7 @@ export async function syncEssentialPageAction(data: EssentialPageData) {
           set: {
             title: data.title,
             emoji: data.emoji || null,
+            coverImage: data.coverImage || null,
             blocks: data.blocks,
             updatedAt: new Date(),
             lastSyncedAt: new Date()
@@ -63,6 +66,7 @@ export async function syncEssentialPageAction(data: EssentialPageData) {
           .set({
             title: data.title,
             emoji: data.emoji || null,
+            coverImage: data.coverImage || null,
             blocks: data.blocks,
             updatedAt: new Date(),
             lastSyncedAt: new Date()
@@ -82,6 +86,7 @@ export async function syncEssentialPageAction(data: EssentialPageData) {
             userId: data.userId,
             title: data.title,
             emoji: data.emoji || null,
+            coverImage: data.coverImage || null,
             blocks: data.blocks
           })
           .returning()

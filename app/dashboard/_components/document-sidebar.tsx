@@ -86,6 +86,7 @@ export interface EssentialPage {
   id: string
   title: string
   emoji: string
+  coverImage?: string
   isBuiltIn?: boolean
 }
 

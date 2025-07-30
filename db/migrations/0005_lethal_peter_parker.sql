@@ -1,0 +1,1 @@
+ALTER TABLE "essential_pages" ADD COLUMN "cover_image" text;

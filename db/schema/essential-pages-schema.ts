@@ -12,6 +12,7 @@ export const essentialPagesTable = pgTable("essential_pages", {
   userId: text("user_id").notNull(),
   title: text("title").notNull().default("New Essential"),
   emoji: text("emoji"),
+  coverImage: text("cover_image"), // Store cover image URL
   blocks: jsonb("blocks").notNull().default([]), // Store blocks as JSONB for efficient querying
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")

@@ -144,7 +144,8 @@ export default function DashboardPage() {
       if (updatedPage) {
         syncPageUpdate(id, {
           title: updatedPage.title,
-          emoji: updatedPage.emoji || undefined
+          emoji: updatedPage.emoji || undefined,
+          coverImage: updatedPage.coverImage || undefined
         })
       }
     },
@@ -228,6 +229,7 @@ export default function DashboardPage() {
           id: `essential-${essential.id}`,
           title: essential.title,
           emoji: essential.emoji,
+          coverImage: essential.coverImage || null,
           userId: userId || "",
           createdAt: new Date(),
           updatedAt: new Date()
@@ -259,10 +261,12 @@ export default function DashboardPage() {
   // Handle updating essential pages
   const handleUpdateEssentialPage = async (updates: Partial<SelectPage>) => {
     if (selectedEssential) {
-      // For essentials, update the title and emoji
+      // For essentials, update the title, emoji, and cover image
       const essentialUpdates: Partial<EssentialPage> = {}
       if (updates.title) essentialUpdates.title = updates.title
       if (updates.emoji) essentialUpdates.emoji = updates.emoji
+      if (updates.coverImage !== undefined)
+        essentialUpdates.coverImage = updates.coverImage || undefined
 
       if (Object.keys(essentialUpdates).length > 0) {
         await updateEssential(selectedEssential, essentialUpdates)
