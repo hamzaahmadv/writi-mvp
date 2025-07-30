@@ -8,6 +8,7 @@ import {
   profilesTable,
   blocksTable,
   pagesTable,
+  essentialPagesTable,
   favoritesTable,
   commentsTable
 } from "@/db/schema"
@@ -21,6 +22,7 @@ const schema = {
   profiles: profilesTable,
   blocks: blocksTable,
   pages: pagesTable,
+  essentialPages: essentialPagesTable,
   favorites: favoritesTable,
   comments: commentsTable
 }

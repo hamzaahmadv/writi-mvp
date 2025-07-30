@@ -6,6 +6,8 @@ import { DocumentSidebar, EssentialPage } from "./_components/document-sidebar"
 import { WritiAiPanel } from "./_components/writi-ai-panel"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { usePage } from "@/lib/hooks/use-page"
+import { useEssentialSync } from "@/lib/hooks/use-essential-sync"
+import { useEssentialRecovery } from "@/lib/hooks/use-essential-recovery"
 import { SelectPage } from "@/db/schema"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -25,6 +27,13 @@ export default function DashboardPage() {
     deletePage,
     switchPage
   } = usePage(userId)
+
+  // Essential pages sync management
+  const { syncStatus, syncPageCreate, syncPageUpdate, syncPageDelete } =
+    useEssentialSync(userId)
+
+  // Essential pages recovery from Supabase
+  const { recoverEssentialPages } = useEssentialRecovery(userId)
 
   // Essentials selection state
   const [selectedEssential, setSelectedEssential] = useState<string | null>(
@@ -109,9 +118,17 @@ export default function DashboardPage() {
       setEssentialPages(updatedPages)
       saveEssentialPages(updatedPages)
 
+      // Background sync to Supabase
+      syncPageCreate(
+        newEssential.id,
+        newEssential.title,
+        newEssential.emoji || undefined,
+        []
+      )
+
       return newEssential
     },
-    [essentialPages, userId, saveEssentialPages]
+    [essentialPages, userId, saveEssentialPages, syncPageCreate]
   )
 
   const updateEssential = useCallback(
@@ -121,8 +138,17 @@ export default function DashboardPage() {
       )
       setEssentialPages(updatedPages)
       saveEssentialPages(updatedPages)
+
+      // Background sync to Supabase
+      const updatedPage = updatedPages.find(page => page.id === id)
+      if (updatedPage) {
+        syncPageUpdate(id, {
+          title: updatedPage.title,
+          emoji: updatedPage.emoji || undefined
+        })
+      }
     },
-    [essentialPages, saveEssentialPages]
+    [essentialPages, saveEssentialPages, syncPageUpdate]
   )
 
   const deleteEssential = useCallback(
@@ -136,12 +162,21 @@ export default function DashboardPage() {
         localStorage.removeItem(`essential-blocks-essential-${id}`)
       }
 
+      // Background sync deletion to Supabase
+      syncPageDelete(id)
+
       // If the deleted essential was selected, deselect it
       if (selectedEssential === id) {
         setSelectedEssential(null)
       }
     },
-    [essentialPages, userId, selectedEssential, saveEssentialPages]
+    [
+      essentialPages,
+      userId,
+      selectedEssential,
+      saveEssentialPages,
+      syncPageDelete
+    ]
   )
 
   // Preload essential pages immediately for instant access

@@ -29,6 +29,13 @@
       "when": 1752710323888,
       "tag": "0003_milky_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1753846187262,
+      "tag": "0004_strange_lilandra",
+      "breakpoints": true
     }
   ]
 }

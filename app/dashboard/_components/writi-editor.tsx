@@ -38,6 +38,7 @@ import { useCurrentUser } from "@/lib/hooks/use-user"
 import { useBlocks } from "@/lib/hooks/use-blocks"
 import { useFavorites } from "@/lib/hooks/use-favorites"
 import { useBlockBatch } from "@/lib/hooks/use-block-batch"
+import { useEssentialSync } from "@/lib/hooks/use-essential-sync"
 import { SelectPage } from "@/db/schema"
 
 interface WritiEditorProps {
@@ -60,6 +61,16 @@ export default function WritiEditor({
 
   // Favorites management
   const { toggleFavorite, isFavorited } = useFavorites(userId)
+
+  // Essential pages sync management
+  const {
+    syncStatus,
+    retryQueue,
+    syncPageCreate,
+    syncPageUpdate,
+    syncPageDelete,
+    retrySync
+  } = useEssentialSync(userId)
 
   // Block batching for better performance
   const { batchUpdate: batchUpdateBlock, flushBatch: flushBlockBatch } =
@@ -113,15 +124,22 @@ export default function WritiEditor({
     }
   }, [isEssential, currentPage?.id])
 
-  // Save essential blocks to localStorage with better error handling
+  // Save essential blocks to localStorage with better error handling and sync
   const saveEssentialBlocks = useCallback(
     (blocks: Block[]) => {
-      if (isEssential && currentPage?.id) {
+      if (isEssential && currentPage?.id && userId) {
         try {
           localStorage.setItem(
             `essential-blocks-${currentPage.id}`,
             JSON.stringify(blocks)
           )
+
+          // Background sync to Supabase (non-blocking)
+          syncPageUpdate(currentPage.id, {
+            title: currentPage.title,
+            emoji: currentPage.emoji || undefined,
+            blocks
+          })
         } catch (error) {
           console.error(
             "Failed to save essential blocks to localStorage:",
@@ -131,7 +149,14 @@ export default function WritiEditor({
         }
       }
     },
-    [isEssential, currentPage?.id]
+    [
+      isEssential,
+      currentPage?.id,
+      currentPage?.title,
+      currentPage?.emoji,
+      userId,
+      syncPageUpdate
+    ]
   )
 
   // Get current blocks (essential or database)
@@ -1306,18 +1331,44 @@ export default function WritiEditor({
 
         {/* Right Section - Actions */}
         <div className="flex items-center space-x-1">
-          {/* Edited Badge */}
-          <span className="mr-4 text-sm font-medium text-gray-500">
-            {isEssential
-              ? "Essential"
-              : `Edited ${new Date(currentPage.updatedAt).toLocaleDateString(
-                  "en-US",
-                  {
-                    month: "short",
-                    day: "numeric"
-                  }
-                )}`}
-          </span>
+          {/* Sync Status & Edited Badge */}
+          <div className="mr-4 flex items-center space-x-2">
+            {isEssential && syncStatus !== "synced" && (
+              <div className="flex items-center space-x-1">
+                {syncStatus === "pending" && (
+                  <>
+                    <Loader2 className="size-3 animate-spin text-blue-500" />
+                    <span className="text-xs text-blue-600">Syncing...</span>
+                  </>
+                )}
+                {syncStatus === "error" && retryQueue > 0 && (
+                  <>
+                    <AlertCircle className="size-3 text-orange-500" />
+                    <span className="text-xs text-orange-600">
+                      {retryQueue} pending
+                    </span>
+                  </>
+                )}
+                {syncStatus === "offline" && (
+                  <>
+                    <EyeOff className="size-3 text-gray-500" />
+                    <span className="text-xs text-gray-600">Offline</span>
+                  </>
+                )}
+              </div>
+            )}
+            <span className="text-sm font-medium text-gray-500">
+              {isEssential
+                ? "Essential"
+                : `Edited ${new Date(currentPage.updatedAt).toLocaleDateString(
+                    "en-US",
+                    {
+                      month: "short",
+                      day: "numeric"
+                    }
+                  )}`}
+            </span>
+          </div>
 
           <Button
             variant="ghost"

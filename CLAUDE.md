@@ -29,7 +29,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Core Application Pattern
 Writi is a Notion-like block-based editor with AI capabilities built on Next.js. The architecture uses a **dual storage strategy**:
 - **Essential Pages**: Stored in localStorage for instant access (Todo List, Getting Started)
-- **Regular Pages**: Stored in PostgreSQL with full persistence
+- **Regular Pages**: Stored in PostgreSQL with full persistence 
 
 ### Block-Based Content System
 The editor uses a hierarchical block structure with 11 block types (headings, paragraphs, lists, callouts, code, etc.). Each block can contain children, enabling nested content with markdown shortcuts and slash commands.
@@ -84,7 +84,6 @@ All schemas follow consistent patterns:
 - `WritiAiPanel` runs independently from editor logic
 - Context-aware with access to current page/block state
 - Non-blocking operations that don't interfere with editing
-- Uses mem0ai for AI memory capabilities
 
 ## Development Guidelines
 
