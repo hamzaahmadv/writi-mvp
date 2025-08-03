@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import WritiEditor from "./_components/writi-editor"
 import { DocumentSidebar, EssentialPage } from "./_components/document-sidebar"
 import { WritiAiPanel } from "./_components/writi-ai-panel"
@@ -47,6 +47,36 @@ export default function DashboardPage() {
   // Dynamic essential pages storage
   const [essentialPages, setEssentialPages] = useState<EssentialPage[]>([])
 
+  // Cleanup function to remove orphaned localStorage data (run manually to avoid infinite loops)
+  const cleanupOrphanedData = useCallback(() => {
+    if (!userId || essentialPages.length === 0) return
+
+    console.log("🧹 Cleaning up orphaned localStorage data...")
+    const prefix = "essential-blocks-"
+    const validPageIds = new Set(essentialPages.map(page => page.id))
+
+    // Check all localStorage keys
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key?.startsWith(prefix)) {
+        // Extract the page ID from the key
+        const pageId = key
+          .replace(prefix, "")
+          .replace("essential-", "")
+          .replace("-blocks", "")
+
+        // If this page ID doesn't exist in our current essential pages, remove it
+        if (
+          !validPageIds.has(pageId) &&
+          !validPageIds.has(`essential-${pageId}`)
+        ) {
+          localStorage.removeItem(key)
+          console.log(`🗑️ Removed orphaned localStorage key: ${key}`)
+        }
+      }
+    }
+  }, [userId, essentialPages])
+
   // Load essential pages from localStorage
   useEffect(() => {
     if (userId) {
@@ -69,15 +99,16 @@ export default function DashboardPage() {
 
   // Set default essential pages
   const setDefaultEssentials = () => {
+    const timestamp = Date.now()
     const defaultEssentials: EssentialPage[] = [
       {
-        id: "todo",
+        id: `todo-${timestamp}`,
         title: "To-do List / Planner",
         emoji: "",
         isBuiltIn: true
       },
       {
-        id: "getting-started",
+        id: `getting-started-${timestamp}`,
         title: "Getting Started",
         emoji: "",
         isBuiltIn: true
@@ -108,7 +139,7 @@ export default function DashboardPage() {
       if (!userId) return null
 
       const newEssential: EssentialPage = {
-        id: `essential-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `essential-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
         title: title || "New Essential",
         emoji: emoji || "",
         isBuiltIn: false
@@ -154,29 +185,50 @@ export default function DashboardPage() {
 
   const deleteEssential = useCallback(
     async (id: string): Promise<void> => {
+      console.log(`🗑️ Deleting essential page: ${id}`)
+
       const updatedPages = essentialPages.filter(page => page.id !== id)
       setEssentialPages(updatedPages)
       saveEssentialPages(updatedPages)
 
-      // Clear any stored blocks for this essential
+      // Clear any stored blocks for this essential (with all possible key formats)
       if (userId) {
-        localStorage.removeItem(`essential-blocks-essential-${id}`)
+        const keysToRemove = [
+          `essential-blocks-${id}`,
+          `essential-blocks-essential-${id}`,
+          `essential-blocks-${id}-blocks`
+        ]
+
+        keysToRemove.forEach(key => {
+          const existing = localStorage.getItem(key)
+          if (existing) {
+            localStorage.removeItem(key)
+            console.log(`🧹 Cleaned up localStorage key: ${key}`)
+          }
+        })
       }
 
-      // Background sync deletion to Supabase
+      // Background sync deletion to Supabase (this will handle gracefully if page doesn't exist)
       syncPageDelete(id)
 
       // If the deleted essential was selected, deselect it
       if (selectedEssential === id) {
         setSelectedEssential(null)
+        console.log(`📍 Deselected deleted essential page: ${id}`)
       }
+
+      // Run cleanup after deletion to remove any remaining orphaned data
+      setTimeout(() => {
+        cleanupOrphanedData()
+      }, 500)
     },
     [
       essentialPages,
       userId,
       selectedEssential,
       saveEssentialPages,
-      syncPageDelete
+      syncPageDelete,
+      cleanupOrphanedData
     ]
   )
 

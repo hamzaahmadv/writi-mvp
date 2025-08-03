@@ -111,6 +111,29 @@ export async function deleteEssentialPageAction(data: { id: string; userId: stri
       return { success: false, error: 'Unauthorized' }
     }
 
+    // First, check if the page exists before attempting delete
+    const existingPage = await db.query.essentialPages.findFirst({
+      where: and(
+        eq(essentialPagesTable.id, data.id),
+        eq(essentialPagesTable.userId, data.userId)
+      )
+    })
+
+    // If page doesn't exist, consider it a successful deletion
+    // (it's already gone, which is the desired state)
+    if (!existingPage) {
+      console.log(`✅ Essential page ${data.id} already deleted or never existed in database`)
+      return { 
+        success: true, 
+        data: { 
+          id: data.id, 
+          title: 'Deleted',
+          wasAlreadyDeleted: true 
+        } 
+      }
+    }
+
+    // Attempt to delete the page
     const [result] = await db
       .delete(essentialPagesTable)
       .where(and(
@@ -120,9 +143,19 @@ export async function deleteEssentialPageAction(data: { id: string; userId: stri
       .returning({ id: essentialPagesTable.id, title: essentialPagesTable.title })
 
     if (!result) {
-      return { success: false, error: 'Essential page not found' }
+      // This shouldn't happen since we checked existence above, but handle gracefully
+      console.log(`⚠️ Essential page ${data.id} could not be deleted (race condition?)`)
+      return { 
+        success: true, 
+        data: { 
+          id: data.id, 
+          title: 'Already deleted',
+          wasAlreadyDeleted: true 
+        } 
+      }
     }
 
+    console.log(`✅ Successfully deleted essential page: ${result.title} (${result.id})`)
     return { success: true, data: result }
   } catch (error) {
     console.error('Essential page delete error:', error)

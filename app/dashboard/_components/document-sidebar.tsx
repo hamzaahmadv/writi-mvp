@@ -993,8 +993,12 @@ export function DocumentSidebar({
 
         {/* Main Navigation Cards */}
         <div className="space-y-2">
-          {navigationItems.map(item => (
-            <NavItemComponent key={item.id} item={item} isMainNav={true} />
+          {navigationItems.map((item, index) => (
+            <NavItemComponent
+              key={`nav-${item.id}-${index}`}
+              item={item}
+              isMainNav={true}
+            />
           ))}
         </div>
       </div>
@@ -1026,9 +1030,9 @@ export function DocumentSidebar({
                       </div>
                     </div>
                   ) : (
-                    favoriteItems.map(favorite => (
+                    favoriteItems.map((favorite, index) => (
                       <FavoriteItemComponent
-                        key={favorite.id}
+                        key={`favorite-${favorite.id}-${index}`}
                         favorite={favorite}
                       />
                     ))
@@ -1059,9 +1063,9 @@ export function DocumentSidebar({
                 className="space-y-1 overflow-hidden p-2"
               >
                 {essentialPages.length > 0 ? (
-                  essentialPages.map(essential => (
+                  essentialPages.map((essential, index) => (
                     <EssentialItemComponent
-                      key={essential.id}
+                      key={`essential-${essential.id}-${index}`}
                       essential={essential}
                     />
                   ))
@@ -1127,8 +1131,11 @@ export function DocumentSidebar({
                 </div>
               ) : pages.length > 0 ? (
                 <div className="space-y-1">
-                  {pages.map(page => (
-                    <PageItemComponent key={page.id} page={page} />
+                  {pages.map((page, index) => (
+                    <PageItemComponent
+                      key={`page-${page.id}-${index}`}
+                      page={page}
+                    />
                   ))}
                 </div>
               ) : (
@@ -1174,8 +1181,11 @@ export function DocumentSidebar({
         {/* Footer Items */}
         <div className="mt-3 pt-2">
           <div className="space-y-1 p-2">
-            {footerItems.map(item => (
-              <NavItemComponent key={item.id} item={item} />
+            {footerItems.map((item, index) => (
+              <NavItemComponent
+                key={`footer-${item.id}-${index}`}
+                item={item}
+              />
             ))}
           </div>
         </div>

@@ -74,6 +74,21 @@ const syncToSupabase = async (operation: SyncOperation) => {
           throw new Error(result.error || "Delete failed")
         }
 
+        // Log different outcomes for debugging
+        if (
+          result.data &&
+          "wasAlreadyDeleted" in result.data &&
+          result.data.wasAlreadyDeleted
+        ) {
+          console.log(
+            `✅ Essential page ${id} was already deleted or never synced`
+          )
+        } else {
+          console.log(
+            `✅ Successfully deleted essential page ${id} from database`
+          )
+        }
+
         return result.data
     }
   } catch (error) {
