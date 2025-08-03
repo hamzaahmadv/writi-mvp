@@ -77,6 +77,34 @@ export default function DashboardPage() {
     }
   }, [userId, essentialPages])
 
+  // Deduplication helper function
+  const deduplicateEssentialPages = useCallback(
+    (pages: EssentialPage[]): EssentialPage[] => {
+      const seenTitles = new Set<string>()
+      const seenIds = new Set<string>()
+      const deduplicatedPages: EssentialPage[] = []
+
+      pages.forEach(page => {
+        const titleKey = page.title.toLowerCase()
+
+        // Skip if we've already seen this title or ID
+        if (seenTitles.has(titleKey) || seenIds.has(page.id)) {
+          console.log(
+            `🗑️ Removing duplicate essential page: ${page.title} (${page.id})`
+          )
+          return
+        }
+
+        seenTitles.add(titleKey)
+        seenIds.add(page.id)
+        deduplicatedPages.push(page)
+      })
+
+      return deduplicatedPages
+    },
+    []
+  )
+
   // Load essential pages from localStorage
   useEffect(() => {
     if (userId) {
@@ -84,7 +112,20 @@ export default function DashboardPage() {
       if (stored) {
         try {
           const parsed = JSON.parse(stored)
-          setEssentialPages(parsed)
+          const deduplicated = deduplicateEssentialPages(parsed)
+
+          // Save back deduplicated version if we removed duplicates
+          if (deduplicated.length !== parsed.length) {
+            localStorage.setItem(
+              `essential-pages-${userId}`,
+              JSON.stringify(deduplicated)
+            )
+            console.log(
+              `✅ Deduplicated essential pages: ${parsed.length} → ${deduplicated.length}`
+            )
+          }
+
+          setEssentialPages(deduplicated)
         } catch (error) {
           console.error("Error loading essential pages:", error)
           // Set default essential pages if parsing fails
@@ -95,7 +136,7 @@ export default function DashboardPage() {
         setDefaultEssentials()
       }
     }
-  }, [userId])
+  }, [userId, deduplicateEssentialPages])
 
   // Set default essential pages
   const setDefaultEssentials = () => {
@@ -114,11 +155,17 @@ export default function DashboardPage() {
         isBuiltIn: true
       }
     ]
-    setEssentialPages(defaultEssentials)
+
+    // Merge with existing pages and deduplicate
+    const existingPages = essentialPages
+    const combinedPages = [...existingPages, ...defaultEssentials]
+    const deduplicatedPages = deduplicateEssentialPages(combinedPages)
+
+    setEssentialPages(deduplicatedPages)
     if (userId) {
       localStorage.setItem(
         `essential-pages-${userId}`,
-        JSON.stringify(defaultEssentials)
+        JSON.stringify(deduplicatedPages)
       )
     }
   }
@@ -138,16 +185,32 @@ export default function DashboardPage() {
     async (title?: string, emoji?: string): Promise<EssentialPage | null> => {
       if (!userId) return null
 
+      const proposedTitle = title || "New Essential"
+
+      // Check if a page with this title already exists
+      const existingPage = essentialPages.find(
+        page => page.title.toLowerCase() === proposedTitle.toLowerCase()
+      )
+
+      if (existingPage) {
+        console.log(
+          `⚠️ Essential page with title "${proposedTitle}" already exists`
+        )
+        return existingPage // Return existing page instead of creating duplicate
+      }
+
       const newEssential: EssentialPage = {
         id: `essential-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-        title: title || "New Essential",
+        title: proposedTitle,
         emoji: emoji || "",
         isBuiltIn: false
       }
 
       const updatedPages = [...essentialPages, newEssential]
-      setEssentialPages(updatedPages)
-      saveEssentialPages(updatedPages)
+      const deduplicatedPages = deduplicateEssentialPages(updatedPages)
+
+      setEssentialPages(deduplicatedPages)
+      saveEssentialPages(deduplicatedPages)
 
       // Background sync to Supabase
       syncPageCreate(
@@ -159,7 +222,13 @@ export default function DashboardPage() {
 
       return newEssential
     },
-    [essentialPages, userId, saveEssentialPages, syncPageCreate]
+    [
+      essentialPages,
+      userId,
+      saveEssentialPages,
+      syncPageCreate,
+      deduplicateEssentialPages
+    ]
   )
 
   const updateEssential = useCallback(
@@ -231,6 +300,42 @@ export default function DashboardPage() {
       cleanupOrphanedData
     ]
   )
+
+  // Manual cleanup function for duplicates (can be called from console in dev mode)
+  const manualCleanupDuplicates = useCallback(() => {
+    if (!userId) return
+
+    console.log("🧹 Running manual cleanup of duplicate essential pages...")
+
+    // Deduplicate current essential pages
+    const deduplicated = deduplicateEssentialPages(essentialPages)
+
+    if (deduplicated.length !== essentialPages.length) {
+      setEssentialPages(deduplicated)
+      saveEssentialPages(deduplicated)
+      console.log(
+        `✅ Cleaned up ${essentialPages.length - deduplicated.length} duplicate pages`
+      )
+    } else {
+      console.log("✅ No duplicates found")
+    }
+
+    // Also run orphaned data cleanup
+    cleanupOrphanedData()
+  }, [
+    userId,
+    essentialPages,
+    deduplicateEssentialPages,
+    saveEssentialPages,
+    cleanupOrphanedData
+  ])
+
+  // Expose cleanup function to window for debugging (dev mode only)
+  useEffect(() => {
+    if (process.env.NODE_ENV === "development") {
+      ;(window as any).cleanupEssentialDuplicates = manualCleanupDuplicates
+    }
+  }, [manualCleanupDuplicates])
 
   // Preload essential pages immediately for instant access
   useEffect(() => {

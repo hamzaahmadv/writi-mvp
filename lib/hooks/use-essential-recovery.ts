@@ -28,17 +28,39 @@ export function useEssentialRecovery(userId: string | null) {
       const result = await getEssentialPagesAction(userId)
 
       if (result.success && result.data) {
+        // Get existing essential pages from localStorage to merge
+        const existingPagesKey = `essential-pages-${userId}`
+        const existingPagesStr = localStorage.getItem(existingPagesKey)
+        const existingPages: EssentialPage[] = existingPagesStr
+          ? JSON.parse(existingPagesStr)
+          : []
+
         const recoveredPages: EssentialPage[] = []
+        const seenTitles = new Set<string>()
+
+        // Add existing pages first (localStorage takes priority)
+        existingPages.forEach(page => {
+          recoveredPages.push(page)
+          seenTitles.add(page.title.toLowerCase())
+        })
 
         // Process each essential page from Supabase
         for (const dbPage of result.data) {
+          // Skip if we already have a page with the same title (avoid duplicates)
+          if (seenTitles.has(dbPage.title.toLowerCase())) {
+            console.log(
+              `⚠️ Skipping duplicate page: ${dbPage.title} (${dbPage.id})`
+            )
+            continue
+          }
+
           // Store blocks in localStorage
           const localStorageKey = `essential-blocks-${dbPage.id}`
           localStorage.setItem(localStorageKey, JSON.stringify(dbPage.blocks))
 
-          // Add to essential pages list
+          // Add to essential pages list (keep original ID format)
           recoveredPages.push({
-            id: dbPage.id.replace("essential-", ""), // Remove 'essential-' prefix
+            id: dbPage.id, // Keep original ID without modification
             title: dbPage.title,
             emoji: dbPage.emoji || "",
             coverImage: dbPage.coverImage || undefined,
@@ -46,21 +68,19 @@ export function useEssentialRecovery(userId: string | null) {
               dbPage.id.includes("todo") ||
               dbPage.id.includes("getting-started")
           })
+
+          seenTitles.add(dbPage.title.toLowerCase())
         }
 
-        // Update essential pages in localStorage
-        if (recoveredPages.length > 0) {
-          const essentialPagesKey = `essential-pages-${userId}`
-          localStorage.setItem(
-            essentialPagesKey,
-            JSON.stringify(recoveredPages)
-          )
-
+        // Update essential pages in localStorage (only if we have changes)
+        if (recoveredPages.length !== existingPages.length) {
+          localStorage.setItem(existingPagesKey, JSON.stringify(recoveredPages))
           console.log(
-            `✅ Recovered ${recoveredPages.length} essential pages from Supabase`
+            `✅ Recovered ${recoveredPages.length} essential pages (${recoveredPages.length - existingPages.length} new)`
           )
-          return recoveredPages
         }
+
+        return recoveredPages
       }
     } catch (error) {
       console.error("Failed to recover essential pages from Supabase:", error)
