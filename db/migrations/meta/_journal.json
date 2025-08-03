@@ -43,6 +43,27 @@
       "when": 1753849112277,
       "tag": "0005_lethal_peter_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1754261427122,
+      "tag": "0006_good_red_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1754261857068,
+      "tag": "0007_confused_the_watchers",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1754261909763,
+      "tag": "0008_lame_randall_flagg",
+      "breakpoints": true
     }
   ]
 }

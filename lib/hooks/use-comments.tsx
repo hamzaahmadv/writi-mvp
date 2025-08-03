@@ -12,6 +12,7 @@ import {
 } from "@/actions/db/comments-actions"
 import { useCurrentUser } from "@/lib/hooks/use-user"
 import { useCommentsCache } from "@/lib/hooks/use-comments-cache"
+import { useEssentialComments } from "@/lib/hooks/use-essential-comments"
 
 interface UseCommentsResult {
   comments: SelectComment[]
@@ -32,6 +33,13 @@ export function useComments(
   pageId: string,
   blockId?: string
 ): UseCommentsResult {
+  // Detect if this is an essential page
+  const isEssentialPage = pageId?.startsWith("essential-")
+
+  // Always call both hooks but only use the appropriate one
+  const essentialResult = useEssentialComments(pageId, blockId)
+
+  // Regular pages: existing database-based logic
   const [comments, setComments] = useState<SelectComment[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -311,6 +319,20 @@ export function useComments(
       }
     }
   }, [pageId, blockId, refreshComments])
+
+  // Return the appropriate result based on page type
+  if (isEssentialPage) {
+    return {
+      comments: essentialResult.comments,
+      isLoading: essentialResult.isLoading,
+      error: essentialResult.error,
+      createComment: essentialResult.createComment,
+      updateComment: essentialResult.updateComment,
+      toggleResolved: essentialResult.toggleResolved,
+      deleteComment: essentialResult.deleteComment,
+      refreshComments: essentialResult.refreshComments
+    }
+  }
 
   return {
     comments,
