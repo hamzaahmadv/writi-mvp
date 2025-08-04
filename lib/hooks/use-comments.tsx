@@ -33,24 +33,25 @@ export function useComments(
   blockId?: string
 ): UseCommentsResult {
   const [comments, setComments] = useState<SelectComment[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false) // Start optimistically
   const [error, setError] = useState<string | null>(null)
   const { userId } = useCurrentUser()
   const { getCachedComments, setCachedComments, invalidateCache } =
-    useCommentsCache()
+    useCommentsCache(5 * 60 * 1000) // 5 minutes cache for better performance
 
   // Load comments for the page/block with caching
   const loadComments = async () => {
     if (!pageId) return
 
-    // Check cache first
+    // Check cache first - immediate optimistic load
     const cachedComments = getCachedComments(pageId, blockId)
     if (cachedComments) {
       setComments(cachedComments)
-      setIsLoading(false)
+      // Don't set loading state for cached content
       return
     }
 
+    // Only show loading if we have no cached data
     setIsLoading(true)
     setError(null)
 
@@ -251,12 +252,9 @@ export function useComments(
       const result = await deleteCommentAction(id, userId)
 
       if (result.isSuccess) {
-        // Notify other components
-        window.dispatchEvent(
-          new CustomEvent("commentsChanged", {
-            detail: { pageId, blockId }
-          })
-        )
+        // Don't trigger refresh after successful deletion - optimistic update already handled it
+        // Invalidate cache to ensure fresh data on next load
+        invalidateCache(pageId, blockId)
       } else {
         // Rollback
         setComments(previousComments)
@@ -280,7 +278,7 @@ export function useComments(
     // Debounce the refresh call
     refreshTimeoutRef.current = setTimeout(() => {
       loadComments()
-    }, 300) // 300ms debounce
+    }, 100) // 100ms debounce for faster updates
   }, [loadComments])
 
   // Load comments on mount and when dependencies change

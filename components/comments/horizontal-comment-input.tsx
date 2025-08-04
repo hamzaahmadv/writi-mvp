@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useCurrentUser } from "@/lib/hooks/use-user"
-import { useComments } from "@/lib/hooks/use-comments"
 import { cn } from "@/lib/utils"
 import { Link, AtSign, ArrowUp, Send, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,6 +13,12 @@ interface HorizontalCommentInputProps {
   onClose?: () => void
   className?: string
   userInteracted?: boolean
+  createComment: (
+    content: string,
+    blockId?: string,
+    parentId?: string
+  ) => Promise<any>
+  hasComments?: boolean
 }
 
 export function HorizontalCommentInput({
@@ -22,16 +27,15 @@ export function HorizontalCommentInput({
   isVisible,
   onClose,
   className,
-  userInteracted = false
+  userInteracted = false,
+  createComment,
+  hasComments = false
 }: HorizontalCommentInputProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const [comment, setComment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { user } = useCurrentUser()
-  const { comments, createComment } = useComments(pageId, blockId)
-
-  const hasComments = comments.length > 0
 
   // Auto-focus when component becomes visible (only if user interacted)
   useEffect(() => {
