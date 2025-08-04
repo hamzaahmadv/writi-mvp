@@ -48,18 +48,56 @@ export function useEssentialRecovery(userId: string | null) {
           })
         }
 
-        // Update essential pages in localStorage
+        // Update essential pages in localStorage with duplicate prevention
         if (recoveredPages.length > 0) {
           const essentialPagesKey = `essential-pages-${userId}`
-          localStorage.setItem(
-            essentialPagesKey,
-            JSON.stringify(recoveredPages)
-          )
 
-          console.log(
-            `✅ Recovered ${recoveredPages.length} essential pages from Supabase`
-          )
-          return recoveredPages
+          // Check if we already have essential pages in localStorage
+          const existingPages = localStorage.getItem(essentialPagesKey)
+          if (existingPages) {
+            try {
+              const existing = JSON.parse(existingPages)
+              // Merge with existing, avoiding duplicates by title
+              const merged = [...existing]
+
+              recoveredPages.forEach(recoveredPage => {
+                const existingIndex = merged.findIndex(
+                  p => p.title === recoveredPage.title
+                )
+                if (existingIndex === -1) {
+                  // Add new page if title doesn't exist
+                  merged.push(recoveredPage)
+                } else {
+                  // Update existing page with recovered data if it's more recent
+                  merged[existingIndex] = recoveredPage
+                }
+              })
+
+              localStorage.setItem(essentialPagesKey, JSON.stringify(merged))
+              console.log(
+                `✅ Merged ${recoveredPages.length} recovered pages with ${existing.length} existing pages`
+              )
+              return merged
+            } catch (error) {
+              console.error("Error merging recovered pages:", error)
+              // Fall back to just using recovered pages
+              localStorage.setItem(
+                essentialPagesKey,
+                JSON.stringify(recoveredPages)
+              )
+              return recoveredPages
+            }
+          } else {
+            // No existing pages, just store recovered ones
+            localStorage.setItem(
+              essentialPagesKey,
+              JSON.stringify(recoveredPages)
+            )
+            console.log(
+              `✅ Recovered ${recoveredPages.length} essential pages from Supabase`
+            )
+            return recoveredPages
+          }
         }
       }
     } catch (error) {

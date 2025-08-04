@@ -21,9 +21,7 @@ export const commentsTable = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     userId: text("user_id").notNull(),
-    pageId: uuid("page_id")
-      .references(() => pagesTable.id, { onDelete: "cascade" })
-      .notNull(),
+    pageId: text("page_id").notNull(),
     blockId: uuid("block_id").references(() => blocksTable.id, {
       onDelete: "cascade"
     }),

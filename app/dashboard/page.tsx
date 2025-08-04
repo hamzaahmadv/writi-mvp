@@ -77,14 +77,51 @@ export default function DashboardPage() {
     }
   }, [userId, essentialPages])
 
-  // Load essential pages from localStorage
+  // Load essential pages from localStorage with duplicate prevention
   useEffect(() => {
     if (userId) {
       const stored = localStorage.getItem(`essential-pages-${userId}`)
       if (stored) {
         try {
           const parsed = JSON.parse(stored)
-          setEssentialPages(parsed)
+          // Remove duplicates based on title (keep the first occurrence)
+          const uniquePages = parsed.filter(
+            (page: EssentialPage, index: number, self: EssentialPage[]) =>
+              index === self.findIndex(p => p.title === page.title)
+          )
+
+          // Clean up orphaned localStorage blocks for removed duplicates
+          if (uniquePages.length !== parsed.length) {
+            const removedPages = parsed.filter(
+              (page: EssentialPage) =>
+                !uniquePages.some(
+                  (unique: EssentialPage) => unique.id === page.id
+                )
+            )
+
+            // Remove localStorage blocks for duplicate pages
+            removedPages.forEach((page: EssentialPage) => {
+              const keysToRemove = [
+                `essential-blocks-${page.id}`,
+                `essential-blocks-essential-${page.id}`,
+                `writi-welcome-created-essential-${page.id}`
+              ]
+              keysToRemove.forEach(key => {
+                localStorage.removeItem(key)
+              })
+            })
+
+            console.log(
+              `🧹 Cleaned up ${parsed.length - uniquePages.length} duplicate essential pages`
+            )
+            localStorage.setItem(
+              `essential-pages-${userId}`,
+              JSON.stringify(uniquePages)
+            )
+            setEssentialPages(uniquePages)
+          } else {
+            setEssentialPages(parsed)
+          }
         } catch (error) {
           console.error("Error loading essential pages:", error)
           // Set default essential pages if parsing fails
@@ -97,18 +134,18 @@ export default function DashboardPage() {
     }
   }, [userId])
 
-  // Set default essential pages
+  // Set default essential pages with proper duplicate detection
   const setDefaultEssentials = () => {
     const timestamp = Date.now()
     const defaultEssentials: EssentialPage[] = [
       {
-        id: `todo-${timestamp}`,
+        id: `essential-todo-${timestamp}`,
         title: "To-do List / Planner",
         emoji: "",
         isBuiltIn: true
       },
       {
-        id: `getting-started-${timestamp}`,
+        id: `essential-getting-started-${timestamp}`,
         title: "Getting Started",
         emoji: "",
         isBuiltIn: true
@@ -138,9 +175,22 @@ export default function DashboardPage() {
     async (title?: string, emoji?: string): Promise<EssentialPage | null> => {
       if (!userId) return null
 
+      const proposedTitle = title || "New Essential"
+
+      // Check if a page with the same title already exists
+      const existingPage = essentialPages.find(
+        page => page.title === proposedTitle
+      )
+      if (existingPage) {
+        console.warn(
+          `Essential page with title "${proposedTitle}" already exists`
+        )
+        return existingPage // Return existing page instead of creating duplicate
+      }
+
       const newEssential: EssentialPage = {
         id: `essential-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-        title: title || "New Essential",
+        title: proposedTitle,
         emoji: emoji || "",
         isBuiltIn: false
       }
