@@ -191,7 +191,8 @@ export function DocumentSidebar({
 
     setIsCreatingEssential(true)
     try {
-      const newEssential = await onCreateEssential("New Essential")
+      // Don't pass a title - let the function generate unique titles automatically
+      const newEssential = await onCreateEssential()
       if (newEssential) {
         handleEssentialSelect(newEssential.id)
         toast.success("New essential page created")

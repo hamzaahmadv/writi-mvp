@@ -175,17 +175,29 @@ export default function DashboardPage() {
     async (title?: string, emoji?: string): Promise<EssentialPage | null> => {
       if (!userId) return null
 
-      const proposedTitle = title || "New Essential"
+      let proposedTitle = title || "New Essential"
 
-      // Check if a page with the same title already exists
-      const existingPage = essentialPages.find(
-        page => page.title === proposedTitle
-      )
-      if (existingPage) {
-        console.warn(
-          `Essential page with title "${proposedTitle}" already exists`
+      // If no custom title provided, generate a unique title
+      if (!title) {
+        let counter = 1
+        const baseTitle = "New Essential"
+
+        // Keep incrementing until we find a unique title
+        while (essentialPages.find(page => page.title === proposedTitle)) {
+          counter++
+          proposedTitle = `${baseTitle} ${counter}`
+        }
+      } else {
+        // If a custom title is provided, check for duplicates and warn
+        const existingPage = essentialPages.find(
+          page => page.title === proposedTitle
         )
-        return existingPage // Return existing page instead of creating duplicate
+        if (existingPage) {
+          console.warn(
+            `Essential page with title "${proposedTitle}" already exists`
+          )
+          return existingPage // Return existing page instead of creating duplicate
+        }
       }
 
       const newEssential: EssentialPage = {
