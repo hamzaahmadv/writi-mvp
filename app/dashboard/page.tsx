@@ -366,7 +366,8 @@ export default function DashboardPage() {
       // For essentials, update the title, emoji, and cover image
       const essentialUpdates: Partial<EssentialPage> = {}
       if (updates.title) essentialUpdates.title = updates.title
-      if (updates.emoji) essentialUpdates.emoji = updates.emoji
+      if (updates.emoji !== undefined)
+        essentialUpdates.emoji = updates.emoji || ""
       if (updates.coverImage !== undefined)
         essentialUpdates.coverImage = updates.coverImage || undefined
 
