@@ -163,7 +163,7 @@ export const getBlockPlaceholder = (type: BlockType): string => {
     case "quote":
       return "Quote"
     case "image":
-      return "Add image URL"
+      return "Click to upload image"
     case "divider":
       return ""
     default:

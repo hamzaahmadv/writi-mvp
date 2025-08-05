@@ -19,6 +19,7 @@ import { Block, BlockType, EditorActions } from "@/types"
 import { getBlockPlaceholder } from "@/lib/block-configs"
 import { useCopyToClipboard } from "@/lib/hooks/use-copy-to-clipboard"
 import { toast } from "sonner"
+import { ImageUploadDialog } from "./image-upload-dialog"
 
 interface BlockRendererProps {
   block: Block
@@ -41,6 +42,7 @@ export function BlockRenderer({
 }: BlockRendererProps) {
   const [isToggleExpanded, setIsToggleExpanded] = useState(true)
   const [isHovered, setIsHovered] = useState(false)
+  const [showImageUploadDialog, setShowImageUploadDialog] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -626,25 +628,40 @@ export function BlockRenderer({
 
       case "image":
         return (
-          <div className="space-y-2">
-            {block.content ? (
-              <img
-                src={block.content}
-                alt="Block image"
-                className="h-auto max-w-full rounded-lg border border-gray-200 shadow-sm"
-                onError={e => {
-                  ;(e.target as HTMLImageElement).style.display = "none"
-                }}
-              />
-            ) : (
-              <div className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-12 transition-colors hover:bg-gray-100">
-                <div className="text-center">
-                  <ImageIcon className="mx-auto mb-3 size-12 text-gray-400" />
-                  <div {...commonProps} className="text-sm text-gray-500" />
+          <>
+            <div className="space-y-2">
+              {block.content ? (
+                <img
+                  src={block.content}
+                  alt="Block image"
+                  className="h-auto max-w-full cursor-pointer rounded-lg border border-gray-200 shadow-sm"
+                  onError={e => {
+                    ;(e.target as HTMLImageElement).style.display = "none"
+                  }}
+                  onClick={() => setShowImageUploadDialog(true)}
+                />
+              ) : (
+                <div
+                  className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-12 transition-colors hover:bg-gray-100"
+                  onClick={() => setShowImageUploadDialog(true)}
+                >
+                  <div className="text-center">
+                    <ImageIcon className="mx-auto mb-3 size-12 text-gray-400" />
+                    <div className="text-sm text-gray-500">
+                      {getBlockPlaceholder("image")}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+            <ImageUploadDialog
+              open={showImageUploadDialog}
+              onOpenChange={setShowImageUploadDialog}
+              onImageUploaded={imageUrl => {
+                actions.updateBlock(block.id, { content: imageUrl })
+              }}
+            />
+          </>
         )
 
       case "divider":
