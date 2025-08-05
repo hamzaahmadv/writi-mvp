@@ -55,7 +55,7 @@ export default function DashboardPage() {
   const [essentialPages, setEssentialPages] = useState<EssentialPage[]>([])
 
   // Track if we've initialized from URL/localStorage
-  const [hasInitialized, setHasInitialized] = useState(false)
+  // const [hasInitialized, setHasInitialized] = useState(false) // TODO: Remove if not needed
   const initializationRef = useRef(false)
 
   // Cleanup function to remove orphaned localStorage data (run manually to avoid infinite loops)
@@ -544,7 +544,7 @@ export default function DashboardPage() {
     }
 
     initializationRef.current = true
-    setHasInitialized(true)
+    // setHasInitialized(true) // TODO: Remove when cleaning up initialization logic
 
     const restorePage = async () => {
       // Try to restore from URL first

@@ -63,7 +63,18 @@ export function useEssentialRecovery(userId: string | null) {
         for (const dbPage of result.data) {
           // Store blocks in localStorage with the full ID
           const localStorageKey = `essential-blocks-${dbPage.id}`
-          localStorage.setItem(localStorageKey, JSON.stringify(dbPage.blocks))
+
+          // Only overwrite localStorage blocks if they don't exist or if Supabase has more recent data
+          const existingBlocks = localStorage.getItem(localStorageKey)
+          const blocks = Array.isArray(dbPage.blocks) ? dbPage.blocks : []
+          if (!existingBlocks || blocks.length > 0) {
+            console.log(`📦 Restoring ${blocks.length} blocks for ${dbPage.id}`)
+            localStorage.setItem(localStorageKey, JSON.stringify(blocks))
+          } else {
+            console.log(
+              `📦 Keeping existing blocks for ${dbPage.id} (localStorage has data)`
+            )
+          }
 
           // Add to essential pages list - keep the full ID as stored in DB
           recoveredPages.push({

@@ -105,22 +105,42 @@ export default function WritiEditor({
   // Load essential blocks from localStorage instantly
   useEffect(() => {
     if (isEssential && currentPage?.id) {
+      console.log(`📚 Loading essential blocks for page: ${currentPage.id}`)
       setEssentialLoading(true)
-      const saved = localStorage.getItem(`essential-blocks-${currentPage.id}`)
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved)
-          setEssentialBlocks(parsed)
-        } catch (error) {
-          console.error("Error loading essential blocks:", error)
+
+      // Use setTimeout to ensure this runs after any potential state updates
+      setTimeout(() => {
+        const saved = localStorage.getItem(`essential-blocks-${currentPage.id}`)
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved)
+            console.log(
+              `📚 Found ${parsed.length} blocks in localStorage for ${currentPage.id}:`,
+              parsed.map((b: Block) => ({
+                id: b.id,
+                type: b.type,
+                content: b.content?.substring(0, 50)
+              }))
+            )
+            setEssentialBlocks(parsed)
+          } catch (error) {
+            console.error("Error loading essential blocks:", error)
+            setEssentialBlocks([])
+          }
+        } else {
+          console.log(
+            `📚 No blocks found in localStorage for ${currentPage.id}`
+          )
           setEssentialBlocks([])
         }
-      } else {
-        setEssentialBlocks([])
-      }
-      setEssentialLoading(false)
+        setEssentialLoading(false)
+      }, 0)
     } else if (!isEssential) {
       // Clear essential blocks when switching to database mode
+      console.log("📚 Clearing essential blocks (switching to database mode)", {
+        isEssential,
+        currentPageId: currentPage?.id
+      })
       setEssentialBlocks([])
       setEssentialLoading(false)
     }
@@ -136,9 +156,20 @@ export default function WritiEditor({
             onEssentialActivity()
           }
 
+          console.log(
+            `💾 Saving ${blocks.length} essential blocks for ${currentPage.id}:`,
+            blocks.map((b: Block) => ({
+              id: b.id,
+              type: b.type,
+              content: b.content?.substring(0, 50)
+            }))
+          )
           localStorage.setItem(
             `essential-blocks-${currentPage.id}`,
             JSON.stringify(blocks)
+          )
+          console.log(
+            `💾 Blocks saved successfully to localStorage for ${currentPage.id}`
           )
 
           // Background sync to Supabase (non-blocking)
@@ -499,13 +530,33 @@ export default function WritiEditor({
 
   // Create initial welcome content only for truly new pages (never had content before)
   useEffect(() => {
+    console.log("🎯 Welcome content check:", {
+      pageId: currentPage?.id,
+      blocksLength: currentBlocks.length,
+      loading: currentBlocksLoading,
+      hasWelcome: currentPage
+        ? hasWelcomeContentBeenCreated(currentPage.id)
+        : false,
+      isEssential
+    })
+
+    // Additional check: For essential pages, also check if localStorage has blocks
+    const hasBlocksInStorage =
+      isEssential && currentPage?.id
+        ? localStorage.getItem(`essential-blocks-${currentPage.id}`) !== null
+        : false
+
     if (
       currentPage &&
       currentBlocks.length === 0 &&
       !currentBlocksLoading &&
       userId &&
-      !hasWelcomeContentBeenCreated(currentPage.id)
+      !hasWelcomeContentBeenCreated(currentPage.id) &&
+      (!isEssential || !hasBlocksInStorage) // Don't create welcome content if blocks exist in localStorage
     ) {
+      console.log("🎯 Creating welcome content for:", currentPage.id, {
+        hasBlocksInStorage
+      })
       // Only create welcome content for pages that are truly new and empty
       // Mark as created immediately to prevent duplicates
       markWelcomeContentCreated(currentPage.id)
