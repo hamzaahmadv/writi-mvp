@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import WritiEditor from "./_components/writi-editor"
 import { DocumentSidebar, EssentialPage } from "./_components/document-sidebar"
 import { WritiAiPanel } from "./_components/writi-ai-panel"
@@ -14,6 +15,11 @@ import { Button } from "@/components/ui/button"
 import { MessageSquare, Star, MoreHorizontal } from "lucide-react"
 
 export default function DashboardPage() {
+  // Navigation and URL state
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+
   // Authentication
   const { userId } = useCurrentUser()
 
@@ -47,6 +53,10 @@ export default function DashboardPage() {
   // Dynamic essential pages storage
   const [essentialPages, setEssentialPages] = useState<EssentialPage[]>([])
 
+  // Track if we've initialized from URL/localStorage
+  const [hasInitialized, setHasInitialized] = useState(false)
+  const initializationRef = useRef(false)
+
   // Cleanup function to remove orphaned localStorage data (run manually to avoid infinite loops)
   const cleanupOrphanedData = useCallback(() => {
     if (!userId || essentialPages.length === 0) return
@@ -66,10 +76,7 @@ export default function DashboardPage() {
           .replace("-blocks", "")
 
         // If this page ID doesn't exist in our current essential pages, remove it
-        if (
-          !validPageIds.has(pageId) &&
-          !validPageIds.has(`essential-${pageId}`)
-        ) {
+        if (!validPageIds.has(pageId)) {
           localStorage.removeItem(key)
           console.log(`🗑️ Removed orphaned localStorage key: ${key}`)
         }
@@ -131,8 +138,7 @@ export default function DashboardPage() {
             removedPages.forEach((page: EssentialPage) => {
               const keysToRemove = [
                 `essential-blocks-${page.id}`,
-                `essential-blocks-essential-${page.id}`,
-                `writi-welcome-created-essential-${page.id}`
+                `writi-welcome-created-${page.id}`
               ]
               keysToRemove.forEach(key => {
                 localStorage.removeItem(key)
@@ -309,12 +315,11 @@ export default function DashboardPage() {
       setEssentialPages(updatedPages)
       saveEssentialPages(updatedPages)
 
-      // Clear any stored blocks for this essential (with all possible key formats)
+      // Clear any stored blocks for this essential
       if (userId) {
         const keysToRemove = [
           `essential-blocks-${id}`,
-          `essential-blocks-essential-${id}`,
-          `essential-blocks-${id}-blocks`
+          `writi-welcome-created-${id}`
         ]
 
         keysToRemove.forEach(key => {
@@ -329,9 +334,10 @@ export default function DashboardPage() {
       // Background sync deletion to Supabase (this will handle gracefully if page doesn't exist)
       syncPageDelete(id)
 
-      // If the deleted essential was selected, deselect it
+      // If the deleted essential was selected, deselect it and clear URL
       if (selectedEssential === id) {
         setSelectedEssential(null)
+        updatePageState(null, false)
         console.log(`📍 Deselected deleted essential page: ${id}`)
       }
 
@@ -357,10 +363,10 @@ export default function DashboardPage() {
 
       essentialPages.forEach(essential => {
         const stored = localStorage.getItem(
-          `essential-blocks-essential-${essential.id}`
+          `essential-blocks-${essential.id}` // ID already has "essential-" prefix
         )
         if (stored) {
-          preloaded.add(`essential-${essential.id}`)
+          preloaded.add(essential.id) // Don't add another prefix
         }
       })
 
@@ -368,24 +374,188 @@ export default function DashboardPage() {
     }
   }, [userId, essentialPages])
 
+  // Update URL and localStorage when page changes
+  const updatePageState = useCallback(
+    (pageId: string | null, isEssential: boolean = false) => {
+      if (!userId) return
+
+      // Update URL without triggering a navigation
+      const params = new URLSearchParams(searchParams.toString())
+
+      if (pageId) {
+        params.set("page", pageId)
+        params.set("type", isEssential ? "essential" : "regular")
+
+        // Store in localStorage as fallback
+        localStorage.setItem(
+          `last-page-${userId}`,
+          JSON.stringify({
+            pageId,
+            isEssential,
+            timestamp: Date.now()
+          })
+        )
+      } else {
+        params.delete("page")
+        params.delete("type")
+        localStorage.removeItem(`last-page-${userId}`)
+      }
+
+      // Update URL without navigation
+      const newUrl = `${pathname}${params.toString() ? "?" + params.toString() : ""}`
+      window.history.replaceState({}, "", newUrl)
+    },
+    [userId, searchParams, pathname]
+  )
+
   const handlePageSelect = useCallback(
     (pageId: string) => {
       // Instant switching - no delays
       setSelectedEssential(null)
       switchPage(pageId)
+      updatePageState(pageId, false)
     },
-    [switchPage]
+    [switchPage, updatePageState]
   )
 
-  const handleEssentialSelect = useCallback((essentialId: string) => {
-    // Instant switching - no delays, no toasts for maximum speed
-    setSelectedEssential(essentialId)
+  // Wrapper for deletePage to handle URL updates
+  const handleDeletePage = useCallback(
+    async (pageId: string) => {
+      // Check if we're deleting the current page
+      if (currentPage?.id === pageId) {
+        // Clear URL state since this page is being deleted
+        updatePageState(null, false)
+      }
+      await deletePage(pageId)
+    },
+    [currentPage, deletePage, updatePageState]
+  )
 
-    // Mark as preloaded for future quick access
-    setPreloadedEssentials(
-      prev => new Set([...prev, `essential-${essentialId}`])
-    )
-  }, [])
+  const handleEssentialSelect = useCallback(
+    (essentialId: string) => {
+      // Instant switching - no delays, no toasts for maximum speed
+      setSelectedEssential(essentialId)
+      updatePageState(essentialId, true)
+
+      // Mark as preloaded for future quick access
+      setPreloadedEssentials(
+        prev => new Set([...prev, essentialId]) // Don't add prefix - ID already has it
+      )
+    },
+    [updatePageState]
+  )
+
+  // Restore page from URL or localStorage on initial load
+  useEffect(() => {
+    // Only run once when we have userId and pages are loaded
+    if (!userId || initializationRef.current || pagesLoading) return
+
+    // Wait for essential pages to load
+    if (essentialPages.length === 0) {
+      // Check if we should have essential pages
+      const storedEssentials = localStorage.getItem(`essential-pages-${userId}`)
+      if (!storedEssentials) {
+        // First time user, no need to wait
+      } else {
+        // Still loading essential pages, wait
+        return
+      }
+    }
+
+    initializationRef.current = true
+    setHasInitialized(true)
+
+    const restorePage = async () => {
+      // Try to restore from URL first
+      const urlPageId = searchParams.get("page")
+      const urlPageType = searchParams.get("type")
+
+      if (urlPageId) {
+        if (urlPageType === "essential") {
+          // Check if essential page exists
+          const essentialExists = essentialPages.some(p => p.id === urlPageId)
+          if (essentialExists) {
+            console.log(`📌 Restoring essential page from URL: ${urlPageId}`)
+            handleEssentialSelect(urlPageId)
+            return
+          }
+        } else {
+          // Check if regular page exists
+          const pageExists = pages.some(p => p.id === urlPageId)
+          if (pageExists) {
+            console.log(`📌 Restoring regular page from URL: ${urlPageId}`)
+            handlePageSelect(urlPageId)
+            return
+          }
+        }
+      }
+
+      // Fallback to localStorage if URL doesn't have valid page
+      try {
+        const stored = localStorage.getItem(`last-page-${userId}`)
+        if (stored) {
+          const { pageId, isEssential, timestamp } = JSON.parse(stored)
+
+          // Check if stored page is not too old (24 hours)
+          const isRecent = Date.now() - timestamp < 24 * 60 * 60 * 1000
+
+          if (isRecent) {
+            if (isEssential) {
+              const essentialExists = essentialPages.some(p => p.id === pageId)
+              if (essentialExists) {
+                console.log(
+                  `📌 Restoring essential page from localStorage: ${pageId}`
+                )
+                handleEssentialSelect(pageId)
+                return
+              }
+            } else {
+              const pageExists = pages.some(p => p.id === pageId)
+              if (pageExists) {
+                console.log(
+                  `📌 Restoring regular page from localStorage: ${pageId}`
+                )
+                handlePageSelect(pageId)
+                return
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Error restoring page from localStorage:", error)
+      }
+
+      // Default: Select first available page
+      if (!currentPage && !selectedEssential) {
+        if (essentialPages.length > 0) {
+          // Default to To-do List if available
+          const todoPage = essentialPages.find(p => p.id === "essential-todo")
+          if (todoPage) {
+            console.log("📌 Defaulting to To-do List essential page")
+            handleEssentialSelect(todoPage.id)
+          } else {
+            console.log("📌 Defaulting to first essential page")
+            handleEssentialSelect(essentialPages[0].id)
+          }
+        } else if (pages.length > 0) {
+          console.log("📌 Defaulting to first regular page")
+          handlePageSelect(pages[0].id)
+        }
+      }
+    }
+
+    restorePage()
+  }, [
+    userId,
+    essentialPages,
+    pages,
+    pagesLoading,
+    currentPage,
+    selectedEssential,
+    searchParams,
+    handleEssentialSelect,
+    handlePageSelect
+  ])
 
   // Get the current essential page or regular page
   const getCurrentPage = () => {
@@ -396,7 +566,7 @@ export default function DashboardPage() {
       if (essential) {
         // Convert EssentialPage to SelectPage format for the editor
         return {
-          id: `essential-${essential.id}`,
+          id: essential.id, // Don't add prefix - ID already contains "essential-"
           title: essential.title,
           emoji: essential.emoji,
           coverImage: essential.coverImage || null,
@@ -484,7 +654,7 @@ export default function DashboardPage() {
           onPageSelect={handlePageSelect}
           onCreatePage={createPage}
           onUpdatePage={updatePage}
-          onDeletePage={deletePage}
+          onDeletePage={handleDeletePage}
           onDuplicatePage={handleDuplicatePage}
           onEssentialSelect={handleEssentialSelect}
           onCreateEssential={createEssential}
@@ -503,7 +673,7 @@ export default function DashboardPage() {
             onBackToDocuments={() => setSelectedEssential(null)}
             isPreloaded={
               selectedEssential
-                ? preloadedEssentials.has(`essential-${selectedEssential}`)
+                ? preloadedEssentials.has(selectedEssential) // Don't add prefix
                 : true
             }
           />

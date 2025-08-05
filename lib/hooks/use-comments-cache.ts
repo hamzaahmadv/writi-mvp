@@ -3,7 +3,7 @@ import { SelectComment } from "@/db/schema"
 
 interface CachedComments {
   pageId: string
-  blockId?: string
+  blockId?: string | null
   comments: SelectComment[]
   timestamp: number
 }
@@ -14,7 +14,7 @@ export function useCommentsCache(
 ) {
   const cacheRef = useRef<Map<string, CachedComments>>(new Map())
 
-  const getCacheKey = (pageId: string, blockId?: string) => {
+  const getCacheKey = (pageId: string, blockId?: string | null) => {
     return blockId ? `${pageId}:${blockId}` : pageId
   }
 
@@ -46,7 +46,7 @@ export function useCommentsCache(
   }, [maxCacheAge, maxCacheSize])
 
   const getCachedComments = useCallback(
-    (pageId: string, blockId?: string): SelectComment[] | null => {
+    (pageId: string, blockId?: string | null): SelectComment[] | null => {
       const key = getCacheKey(pageId, blockId)
       const cached = cacheRef.current.get(key)
 
@@ -66,7 +66,7 @@ export function useCommentsCache(
   const setCachedComments = useCallback(
     (
       pageId: string,
-      blockId: string | undefined,
+      blockId: string | null | undefined,
       comments: SelectComment[]
     ) => {
       const key = getCacheKey(pageId, blockId)
@@ -81,22 +81,25 @@ export function useCommentsCache(
     [cleanupCache]
   )
 
-  const invalidateCache = useCallback((pageId?: string, blockId?: string) => {
-    if (pageId && blockId) {
-      // Invalidate specific page and block
-      const key = getCacheKey(pageId, blockId)
-      cacheRef.current.delete(key)
-    } else if (pageId) {
-      // Invalidate all comments for a page
-      const keysToDelete = Array.from(cacheRef.current.keys()).filter(
-        key => key.startsWith(`${pageId}:`) || key === pageId
-      )
-      keysToDelete.forEach(key => cacheRef.current.delete(key))
-    } else {
-      // Clear all cache
-      cacheRef.current.clear()
-    }
-  }, [])
+  const invalidateCache = useCallback(
+    (pageId?: string, blockId?: string | null) => {
+      if (pageId && blockId) {
+        // Invalidate specific page and block
+        const key = getCacheKey(pageId, blockId)
+        cacheRef.current.delete(key)
+      } else if (pageId) {
+        // Invalidate all comments for a page
+        const keysToDelete = Array.from(cacheRef.current.keys()).filter(
+          key => key.startsWith(`${pageId}:`) || key === pageId
+        )
+        keysToDelete.forEach(key => cacheRef.current.delete(key))
+      } else {
+        // Clear all cache
+        cacheRef.current.clear()
+      }
+    },
+    []
+  )
 
   const getCacheStats = useCallback(() => {
     return {

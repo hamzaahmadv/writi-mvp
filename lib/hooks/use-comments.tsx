@@ -30,7 +30,7 @@ interface UseCommentsResult {
 
 export function useComments(
   pageId: string,
-  blockId?: string
+  blockId?: string | null
 ): UseCommentsResult {
   const [comments, setComments] = useState<SelectComment[]>([])
   const [isLoading, setIsLoading] = useState(false) // Start optimistically
@@ -43,8 +43,11 @@ export function useComments(
   const loadComments = async () => {
     if (!pageId) return
 
+    // Clean blockId - treat undefined, null, or empty string as null
+    const cleanBlockId = blockId && blockId.trim() !== "" ? blockId : null
+
     // Check cache first - immediate optimistic load
-    const cachedComments = getCachedComments(pageId, blockId)
+    const cachedComments = getCachedComments(pageId, cleanBlockId)
     if (cachedComments) {
       setComments(cachedComments)
       // Don't set loading state for cached content
@@ -56,11 +59,11 @@ export function useComments(
     setError(null)
 
     try {
-      const result = await getCommentsByPageAction(pageId, blockId)
+      const result = await getCommentsByPageAction(pageId, cleanBlockId)
 
       if (result.isSuccess) {
         setComments(result.data)
-        setCachedComments(pageId, blockId, result.data)
+        setCachedComments(pageId, cleanBlockId, result.data)
       } else {
         setError(result.message)
       }
@@ -80,11 +83,16 @@ export function useComments(
     ): Promise<SelectComment | null> => {
       if (!userId || !content.trim()) return null
 
+      // Clean blockId values
+      const cleanTargetBlockId =
+        targetBlockId && targetBlockId.trim() !== "" ? targetBlockId : null
+      const cleanBlockId = blockId && blockId.trim() !== "" ? blockId : null
+
       const tempComment: SelectComment = {
         id: `temp_${Date.now()}`,
         userId,
         pageId,
-        blockId: targetBlockId || null,
+        blockId: cleanTargetBlockId,
         content: content.trim(),
         resolved: false,
         parentId: parentId || null,
@@ -98,7 +106,7 @@ export function useComments(
       // Notify other components about the new comment
       window.dispatchEvent(
         new CustomEvent("commentsChanged", {
-          detail: { pageId, blockId: targetBlockId || blockId }
+          detail: { pageId, blockId: cleanTargetBlockId || cleanBlockId }
         })
       )
 
@@ -106,7 +114,7 @@ export function useComments(
         const result = await createCommentAction({
           userId,
           pageId,
-          blockId: targetBlockId || null,
+          blockId: cleanTargetBlockId,
           content: content.trim(),
           parentId: parentId || null
         })
@@ -120,12 +128,12 @@ export function useComments(
           )
 
           // Invalidate cache for this page/block
-          invalidateCache(pageId, targetBlockId || blockId)
+          invalidateCache(pageId, cleanTargetBlockId || cleanBlockId)
 
           // Notify other components about the successful creation
           window.dispatchEvent(
             new CustomEvent("commentsChanged", {
-              detail: { pageId, blockId: targetBlockId || blockId }
+              detail: { pageId, blockId: cleanTargetBlockId || cleanBlockId }
             })
           )
 
@@ -155,6 +163,9 @@ export function useComments(
     async (id: string, content: string): Promise<void> => {
       if (!userId || !content.trim()) return
 
+      // Clean blockId for cache operations
+      const cleanBlockId = blockId && blockId.trim() !== "" ? blockId : null
+
       // Optimistic update
       const previousComments = [...comments]
       setComments(prev =>
@@ -178,7 +189,7 @@ export function useComments(
           )
 
           // Invalidate cache
-          invalidateCache(pageId, blockId)
+          invalidateCache(pageId, cleanBlockId)
 
           // Notify other components
           window.dispatchEvent(
@@ -244,6 +255,9 @@ export function useComments(
   const deleteComment = async (id: string): Promise<void> => {
     if (!userId) return
 
+    // Clean blockId for cache operations
+    const cleanBlockId = blockId && blockId.trim() !== "" ? blockId : null
+
     // Optimistic update
     const previousComments = [...comments]
     setComments(prev => prev.filter(comment => comment.id !== id))
@@ -254,7 +268,7 @@ export function useComments(
       if (result.isSuccess) {
         // Don't trigger refresh after successful deletion - optimistic update already handled it
         // Invalidate cache to ensure fresh data on next load
-        invalidateCache(pageId, blockId)
+        invalidateCache(pageId, cleanBlockId)
       } else {
         // Rollback
         setComments(previousComments)

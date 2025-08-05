@@ -34,7 +34,7 @@ export async function createCommentAction(
 
 export async function getCommentsByPageAction(
   pageId: string,
-  blockId?: string
+  blockId?: string | null
 ): Promise<ActionState<SelectComment[]>> {
   try {
     if (!pageId) {
@@ -42,11 +42,14 @@ export async function getCommentsByPageAction(
       return { isSuccess: false, message: "Page ID is required" }
     }
 
-    const whereConditions = blockId
-      ? and(eq(commentsTable.pageId, pageId), eq(commentsTable.blockId, blockId))
+    // Clean blockId - treat undefined, null, or empty string as null
+    const cleanBlockId = blockId && blockId.trim() !== "" ? blockId : null
+
+    const whereConditions = cleanBlockId
+      ? and(eq(commentsTable.pageId, pageId), eq(commentsTable.blockId, cleanBlockId))
       : and(eq(commentsTable.pageId, pageId), isNull(commentsTable.blockId))
 
-    console.log("Fetching comments for pageId:", pageId, "blockId:", blockId)
+    console.log("Fetching comments for pageId:", pageId, "blockId:", cleanBlockId || "null")
 
     const comments = await db.query.comments.findMany({
       where: whereConditions,
