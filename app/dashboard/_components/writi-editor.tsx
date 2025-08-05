@@ -82,7 +82,7 @@ export default function WritiEditor({
           await updateBlockInDb(blockId, updates)
         }
       },
-      50 // Reduced batch timeout for faster block updates
+      25 // Ultra-fast batch timeout for immediate block updates
     )
 
   // Blocks management - use database for regular pages, localStorage for essentials

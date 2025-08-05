@@ -344,13 +344,13 @@ export function BlockRenderer({
       clearTimeout(updateTimeoutRef.current)
     }
 
-    // Reduced debounce time for more responsive typing
+    // Ultra-fast debounce for more responsive typing
     updateTimeoutRef.current = setTimeout(() => {
       // Only update if content has actually changed
       if (lastContentRef.current !== block.content) {
         actions.updateBlock(block.id, { content: lastContentRef.current })
       }
-    }, 100) // Reduced from 150ms to 100ms
+    }, 50) // Reduced to 50ms for faster persistence
   }
 
   // Copy to clipboard functionality

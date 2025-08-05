@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { SelectBlock } from "@/db/schema"
 import { Block, BlockType } from "@/types"
 import {
@@ -10,6 +10,8 @@ import {
   deleteBlockAction,
   updateBlockOrderAction
 } from "@/actions/db/blocks-actions"
+import { useBlockCache } from "./use-block-cache"
+import { usePredictiveBlocks } from "./use-predictive-blocks"
 
 interface UseBlocksResult {
   blocks: Block[]
@@ -46,10 +48,14 @@ function editorBlockToDbBlock(
   block: Block,
   userId: string,
   pageId: string,
-  order: number
+  order: number,
+  isPredictiveId: (id: string) => boolean
 ) {
   return {
-    id: block.id.startsWith("temp_") ? undefined : block.id, // Don't include temp IDs
+    id:
+      block.id.startsWith("temp_") || isPredictiveId(block.id)
+        ? undefined
+        : block.id, // Don't include temp or predictive IDs
     userId,
     pageId,
     parentId: null, // Handle nesting later
@@ -67,6 +73,23 @@ export function useBlocks(
   const [blocks, setBlocks] = useState<Block[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Initialize block cache
+  const {
+    getCachedBlocks,
+    setCachedBlocks,
+    updateCachedBlock,
+    removeCachedBlock,
+    clearPageCache,
+    cleanupExpiredEntries
+  } = useBlockCache()
+
+  // Initialize predictive blocks
+  const { getPreGeneratedId, prepareNextBlock, isPredictiveId } =
+    usePredictiveBlocks()
+
+  // Cleanup timer ref
+  const cleanupTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Check if pageId is a valid UUID
   const isValidUUID = (id: string): boolean => {
@@ -90,6 +113,28 @@ export function useBlocks(
       return
     }
 
+    // Try to load from cache first for instant display
+    const cachedBlocks = getCachedBlocks(pageId)
+    if (cachedBlocks && cachedBlocks.length > 0) {
+      setBlocks(cachedBlocks)
+      setIsLoading(false)
+
+      // Still fetch from DB in background to ensure we have latest data
+      getBlocksByPageAction(pageId, userId)
+        .then(result => {
+          if (result.isSuccess) {
+            const editorBlocks = result.data.map(dbBlockToEditorBlock)
+            setCachedBlocks(pageId, editorBlocks)
+            setBlocks(editorBlocks)
+          }
+        })
+        .catch(err => {
+          console.error("Background block sync failed:", err)
+        })
+
+      return
+    }
+
     setIsLoading(true)
     setError(null)
 
@@ -98,6 +143,7 @@ export function useBlocks(
 
       if (result.isSuccess) {
         const editorBlocks = result.data.map(dbBlockToEditorBlock)
+        setCachedBlocks(pageId, editorBlocks) // Cache the blocks
         setBlocks(editorBlocks)
       } else {
         setError(result.message)
@@ -119,8 +165,8 @@ export function useBlocks(
   ): Promise<string | null> => {
     if (!userId || !pageId || !isValidUUID(pageId)) return null
 
-    // Generate temporary ID for optimistic update
-    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    // Use pre-generated ID for faster creation
+    const tempId = getPreGeneratedId()
 
     // Determine order
     let order = 0
@@ -165,16 +211,20 @@ export function useBlocks(
 
     try {
       const result = await createBlockAction(
-        editorBlockToDbBlock(newBlock, userId, pageId, order)
+        editorBlockToDbBlock(newBlock, userId, pageId, order, isPredictiveId)
       )
 
       if (result.isSuccess) {
         const realBlock = dbBlockToEditorBlock(result.data)
 
         // Replace temp block with real block
-        setBlocks(prev =>
-          prev.map(block => (block.id === tempId ? realBlock : block))
-        )
+        setBlocks(prev => {
+          const updatedBlocks = prev.map(block =>
+            block.id === tempId ? realBlock : block
+          )
+          if (pageId) setCachedBlocks(pageId, updatedBlocks) // Update cache
+          return updatedBlocks
+        })
 
         return realBlock.id
       } else {
@@ -197,13 +247,34 @@ export function useBlocks(
     id: string,
     updates: Partial<Block>
   ): Promise<void> => {
-    // Optimistic update
-    setBlocks(prev =>
-      prev.map(block => (block.id === id ? { ...block, ...updates } : block))
-    )
+    // Optimistic update with cache
+    setBlocks(prev => {
+      const updatedBlocks = prev.map(block =>
+        block.id === id ? { ...block, ...updates } : block
+      )
+      if (pageId) {
+        // Update cache immediately
+        const updatedBlock = updatedBlocks.find(b => b.id === id)
+        if (updatedBlock) {
+          updateCachedBlock(pageId, id, updates)
 
-    // Skip database update for temp blocks or invalid pageId
-    if (id.startsWith("temp_") || !pageId || !isValidUUID(pageId)) return
+          // Check if we should prepare next block (for content updates)
+          if (updates.content !== undefined) {
+            prepareNextBlock(updates.content)
+          }
+        }
+      }
+      return updatedBlocks
+    })
+
+    // Skip database update for temp/predictive blocks or invalid pageId
+    if (
+      id.startsWith("temp_") ||
+      isPredictiveId(id) ||
+      !pageId ||
+      !isValidUUID(pageId)
+    )
+      return
 
     try {
       const result = await updateBlockAction(id, {
@@ -214,9 +285,13 @@ export function useBlocks(
 
       if (result.isSuccess) {
         const updatedBlock = dbBlockToEditorBlock(result.data)
-        setBlocks(prev =>
-          prev.map(block => (block.id === id ? updatedBlock : block))
-        )
+        setBlocks(prev => {
+          const updatedBlocks = prev.map(block =>
+            block.id === id ? updatedBlock : block
+          )
+          if (pageId) setCachedBlocks(pageId, updatedBlocks) // Update full cache
+          return updatedBlocks
+        })
       } else {
         // Revert optimistic update on failure
         await loadBlocks()
@@ -232,11 +307,24 @@ export function useBlocks(
 
   // Delete a block
   const deleteBlock = async (id: string): Promise<void> => {
-    // Optimistic update
-    setBlocks(prev => prev.filter(block => block.id !== id))
+    // Optimistic update with cache
+    setBlocks(prev => {
+      const updatedBlocks = prev.filter(block => block.id !== id)
+      if (pageId) {
+        removeCachedBlock(pageId, id) // Remove from cache
+        setCachedBlocks(pageId, updatedBlocks) // Update full cache
+      }
+      return updatedBlocks
+    })
 
-    // Skip database update for temp blocks or invalid pageId
-    if (id.startsWith("temp_") || !pageId || !isValidUUID(pageId)) return
+    // Skip database update for temp/predictive blocks or invalid pageId
+    if (
+      id.startsWith("temp_") ||
+      isPredictiveId(id) ||
+      !pageId ||
+      !isValidUUID(pageId)
+    )
+      return
 
     try {
       const result = await deleteBlockAction(id)
@@ -308,6 +396,32 @@ export function useBlocks(
   useEffect(() => {
     loadBlocks()
   }, [userId, pageId])
+
+  // Setup periodic cache cleanup
+  useEffect(() => {
+    // Clean up expired entries every 2 minutes
+    cleanupTimerRef.current = setInterval(
+      () => {
+        cleanupExpiredEntries()
+      },
+      2 * 60 * 1000
+    )
+
+    return () => {
+      if (cleanupTimerRef.current) {
+        clearInterval(cleanupTimerRef.current)
+      }
+    }
+  }, [cleanupExpiredEntries])
+
+  // Clear page cache when unmounting or page changes
+  useEffect(() => {
+    return () => {
+      if (pageId) {
+        clearPageCache(pageId)
+      }
+    }
+  }, [pageId, clearPageCache])
 
   return {
     blocks,
