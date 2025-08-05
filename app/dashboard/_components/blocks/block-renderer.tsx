@@ -187,7 +187,7 @@ export function BlockRenderer({
       const nextType = block.type.startsWith("heading")
         ? "paragraph"
         : block.type
-      actions.createBlock(block.id, nextType as BlockType, true) // Enable autoFocus for smooth cursor movement
+      actions.createBlock(block.id, nextType as BlockType, true) // Enable autoFocus for instant cursor movement
     }
 
     // Backspace on empty block - delete block (only if cursor is at start AND block is empty)
