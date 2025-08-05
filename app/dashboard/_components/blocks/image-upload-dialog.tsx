@@ -106,20 +106,20 @@ export function ImageUploadDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="bg-white sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ImageIcon className="size-5" />
+          <DialogTitle className="flex items-center gap-2 text-gray-900">
+            <ImageIcon className="size-5 text-gray-800" />
             Add an image
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 bg-white">
           {/* File Drop Zone */}
           <div
             className={`
-              relative rounded-lg border-2 border-dashed p-8 text-center transition-colors
-              ${dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"}
+              relative rounded-lg border-2 border-dashed bg-white p-8 text-center transition-colors
+              ${dragOver ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400 hover:bg-gray-50"}
               ${selectedFile ? "border-green-500 bg-green-50" : ""}
             `}
             onDragOver={handleDragOver}
@@ -139,15 +139,15 @@ export function ImageUploadDialog({
                 {selectedFile ? (
                   <CheckCircle className="size-6 text-green-600" />
                 ) : (
-                  <Upload className="size-6 text-gray-400" />
+                  <Upload className="size-6 text-gray-600" />
                 )}
               </div>
 
               <div>
-                <p className="text-sm font-medium text-gray-900">
+                <p className="text-sm font-semibold text-gray-900">
                   {selectedFile ? selectedFile.name : "Upload file"}
                 </p>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-700">
                   {selectedFile
                     ? `${formatFileSize(selectedFile.size)} • ${selectedFile.type}`
                     : "Drag and drop your image here, or click to browse"}
@@ -167,9 +167,9 @@ export function ImageUploadDialog({
           </div>
 
           {/* File Requirements */}
-          <div className="text-xs text-gray-500">
-            <p>The maximum size per file is 5 MB.</p>
-            <p>Supported formats: PNG, JPG, WebP</p>
+          <div className="rounded-md bg-gray-50 p-3 text-xs text-gray-900">
+            <p className="font-medium">The maximum size per file is 5 MB.</p>
+            <p className="font-medium">Supported formats: PNG, JPG, WebP</p>
           </div>
 
           {/* Error Display */}
@@ -208,16 +208,19 @@ export function ImageUploadDialog({
           {isUploading && (
             <div className="space-y-2">
               <Progress value={undefined} className="h-2" />
-              <p className="text-sm text-gray-600">Uploading image...</p>
+              <p className="text-sm font-medium text-gray-800">
+                Uploading image...
+              </p>
             </div>
           )}
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 bg-white pt-2">
             <Button
               variant="outline"
               onClick={handleClose}
               disabled={isUploading}
+              className="border-gray-300 text-gray-900 hover:bg-gray-50"
             >
               Cancel
             </Button>
@@ -226,6 +229,7 @@ export function ImageUploadDialog({
               disabled={
                 !selectedFile || !isValidFile || !isValidType || isUploading
               }
+              className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300"
             >
               {isUploading ? "Uploading..." : "Upload"}
             </Button>
