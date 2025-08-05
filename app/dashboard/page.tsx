@@ -84,10 +84,38 @@ export default function DashboardPage() {
       if (stored) {
         try {
           const parsed = JSON.parse(stored)
-          // Remove duplicates based on title (keep the first occurrence)
-          const uniquePages = parsed.filter(
+
+          // First, migrate old timestamp-based IDs to stable IDs
+          const migrated = parsed.map((page: EssentialPage) => {
+            // Check if this is an old todo page with timestamp ID or old default ID
+            if (
+              page.title === "To-do List / Planner" &&
+              (page.id.match(/essential-todo-\d+/) ||
+                page.id === "essential-todo-default")
+            ) {
+              // Clean up old localStorage blocks
+              localStorage.removeItem(`essential-blocks-${page.id}`)
+              localStorage.removeItem(`writi-welcome-created-${page.id}`)
+              return { ...page, id: "essential-todo" }
+            }
+            // Check if this is an old getting started page with timestamp ID or old default ID
+            if (
+              page.title === "Getting Started" &&
+              (page.id.match(/essential-getting-started-\d+/) ||
+                page.id === "essential-getting-started-default")
+            ) {
+              // Clean up old localStorage blocks
+              localStorage.removeItem(`essential-blocks-${page.id}`)
+              localStorage.removeItem(`writi-welcome-created-${page.id}`)
+              return { ...page, id: "essential-getting-started" }
+            }
+            return page
+          })
+
+          // Remove duplicates based on ID (keep the first occurrence)
+          const uniquePages = migrated.filter(
             (page: EssentialPage, index: number, self: EssentialPage[]) =>
-              index === self.findIndex(p => p.title === page.title)
+              index === self.findIndex(p => p.id === page.id)
           )
 
           // Clean up orphaned localStorage blocks for removed duplicates
@@ -134,29 +162,57 @@ export default function DashboardPage() {
     }
   }, [userId])
 
-  // Set default essential pages with proper duplicate detection
+  // Set default essential pages with stable IDs
   const setDefaultEssentials = () => {
-    const timestamp = Date.now()
+    // Use stable IDs that don't change between sessions
     const defaultEssentials: EssentialPage[] = [
       {
-        id: `essential-todo-${timestamp}`,
+        id: `essential-todo`,
         title: "To-do List / Planner",
         emoji: "",
         isBuiltIn: true
       },
       {
-        id: `essential-getting-started-${timestamp}`,
+        id: `essential-getting-started`,
         title: "Getting Started",
         emoji: "",
         isBuiltIn: true
       }
     ]
+
+    // Check if we already have these default pages in localStorage
+    const existingPagesKey = `essential-pages-${userId}`
+    const existing = localStorage.getItem(existingPagesKey)
+
+    if (existing) {
+      try {
+        const parsed = JSON.parse(existing)
+        // Only add default pages if they don't already exist
+        const hasDefaults = parsed.some(
+          (page: EssentialPage) =>
+            page.id === "essential-todo" ||
+            page.id === "essential-getting-started"
+        )
+
+        if (!hasDefaults) {
+          // Add default pages to existing ones
+          const merged = [...parsed, ...defaultEssentials]
+          setEssentialPages(merged)
+          localStorage.setItem(existingPagesKey, JSON.stringify(merged))
+        } else {
+          // Just use existing pages
+          setEssentialPages(parsed)
+        }
+        return
+      } catch (error) {
+        console.error("Error parsing existing essential pages:", error)
+      }
+    }
+
+    // No existing pages or error parsing, set defaults
     setEssentialPages(defaultEssentials)
     if (userId) {
-      localStorage.setItem(
-        `essential-pages-${userId}`,
-        JSON.stringify(defaultEssentials)
-      )
+      localStorage.setItem(existingPagesKey, JSON.stringify(defaultEssentials))
     }
   }
 
@@ -201,7 +257,7 @@ export default function DashboardPage() {
       }
 
       const newEssential: EssentialPage = {
-        id: `essential-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+        id: `essential-custom-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
         title: proposedTitle,
         emoji: emoji || "",
         isBuiltIn: false

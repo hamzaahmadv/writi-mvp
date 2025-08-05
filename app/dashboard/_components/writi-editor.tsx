@@ -505,20 +505,18 @@ export default function WritiEditor({
         createEssentialBlock(undefined, "heading_1").then(blockId => {
           if (blockId) {
             updateEssentialBlock(blockId, {
-              content:
-                currentPage.id === "essential-todo"
-                  ? "To-do List / Planner"
-                  : "Getting Started"
+              content: currentPage.id.includes("todo")
+                ? "To-do List / Planner"
+                : "Getting Started"
             })
             // Create a paragraph block below
             setTimeout(() => {
               createEssentialBlock(blockId, "paragraph").then(paragraphId => {
                 if (paragraphId) {
                   updateEssentialBlock(paragraphId, {
-                    content:
-                      currentPage.id === "essential-todo"
-                        ? "Create and manage your tasks efficiently. Start typing to add your first task..."
-                        : "Welcome to Writi AI! This is your quick start guide. Start typing to customize this content..."
+                    content: currentPage.id.includes("todo")
+                      ? "Create and manage your tasks efficiently. Start typing to add your first task..."
+                      : "Welcome to Writi AI! This is your quick start guide. Start typing to customize this content..."
                   })
                 }
               })
