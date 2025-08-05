@@ -23,9 +23,35 @@ export interface EssentialPage {
 }
 
 export function useEssentialRecovery(userId: string | null) {
+  // Track last activity to prevent race conditions
+  const getLastActivityTime = useCallback(() => {
+    const key = `essential-last-activity-${userId}`
+    const stored = localStorage.getItem(key)
+    return stored ? parseInt(stored) : 0
+  }, [userId])
+
+  const updateLastActivityTime = useCallback(() => {
+    if (userId) {
+      localStorage.setItem(
+        `essential-last-activity-${userId}`,
+        Date.now().toString()
+      )
+    }
+  }, [userId])
+
   // Recover essential pages from Supabase and sync to localStorage
   const recoverEssentialPages = useCallback(async () => {
     if (!userId) return
+
+    // Check if there's been recent activity (within last 5 seconds)
+    const lastActivity = getLastActivityTime()
+    const timeSinceActivity = Date.now() - lastActivity
+    if (timeSinceActivity < 5000) {
+      console.log(
+        `⏳ Skipping recovery due to recent activity (${timeSinceActivity}ms ago)`
+      )
+      return []
+    }
 
     try {
       const result = await getEssentialPagesAction(userId)
@@ -71,8 +97,19 @@ export function useEssentialRecovery(userId: string | null) {
                   // Add new page if ID doesn't exist
                   merged.push(recoveredPage)
                 } else {
-                  // Update existing page with recovered data
-                  merged[existingIndex] = recoveredPage
+                  // Intelligent merge: preserve local changes, only update missing fields
+                  const existing = merged[existingIndex]
+                  merged[existingIndex] = {
+                    ...recoveredPage, // Base data from Supabase
+                    ...existing, // Preserve local changes
+                    // Keep local data if it's more recent than recovered data
+                    title: existing.title || recoveredPage.title,
+                    emoji: existing.emoji || recoveredPage.emoji,
+                    coverImage: existing.coverImage || recoveredPage.coverImage
+                  }
+                  console.log(
+                    `🔄 Merged page ${recoveredPage.id}: local=${!!existing.coverImage} recovered=${!!recoveredPage.coverImage} final=${!!merged[existingIndex].coverImage}`
+                  )
                 }
               })
 
@@ -146,9 +183,25 @@ export function useEssentialRecovery(userId: string | null) {
     if (userId) {
       // Small delay to ensure localStorage is ready
       const timer = setTimeout(async () => {
-        await recoverEssentialPages()
+        const recoveredPages = await recoverEssentialPages()
         // Clean up old pages after recovery
         await cleanupOldEssentialPages()
+
+        // Trigger a custom event to notify dashboard that recovery is complete
+        if (recoveredPages && recoveredPages.length > 0) {
+          console.log(
+            "🔄 Essential pages recovery completed, notifying dashboard"
+          )
+          window.dispatchEvent(
+            new CustomEvent("essentialPagesRecovered", {
+              detail: { userId, pages: recoveredPages }
+            })
+          )
+        } else {
+          console.log(
+            "📭 No pages recovered from Supabase, skipping notification"
+          )
+        }
       }, 100)
 
       return () => clearTimeout(timer)
@@ -156,6 +209,7 @@ export function useEssentialRecovery(userId: string | null) {
   }, [userId, recoverEssentialPages, cleanupOldEssentialPages])
 
   return {
-    recoverEssentialPages
+    recoverEssentialPages,
+    updateLastActivityTime
   }
 }

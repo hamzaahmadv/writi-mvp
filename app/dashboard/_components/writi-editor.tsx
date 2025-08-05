@@ -47,6 +47,7 @@ interface WritiEditorProps {
   isEssential?: boolean
   onBackToDocuments?: () => void
   isPreloaded?: boolean
+  onEssentialActivity?: () => void // Track essential page activity
 }
 
 export default function WritiEditor({
@@ -54,7 +55,8 @@ export default function WritiEditor({
   onUpdatePage,
   isEssential = false,
   onBackToDocuments,
-  isPreloaded = false
+  isPreloaded = false,
+  onEssentialActivity
 }: WritiEditorProps) {
   // Authentication
   const { userId, isLoaded: userLoaded } = useCurrentUser()
@@ -129,6 +131,11 @@ export default function WritiEditor({
     (blocks: Block[]) => {
       if (isEssential && currentPage?.id && userId) {
         try {
+          // Track essential page activity
+          if (isEssential && onEssentialActivity) {
+            onEssentialActivity()
+          }
+
           localStorage.setItem(
             `essential-blocks-${currentPage.id}`,
             JSON.stringify(blocks)
@@ -138,6 +145,7 @@ export default function WritiEditor({
           syncPageUpdate(currentPage.id, {
             title: currentPage.title,
             emoji: currentPage.emoji || undefined,
+            coverImage: currentPage.coverImage || undefined, // ✅ Include cover image in block sync
             blocks
           })
         } catch (error) {
@@ -154,8 +162,10 @@ export default function WritiEditor({
       currentPage?.id,
       currentPage?.title,
       currentPage?.emoji,
+      currentPage?.coverImage,
       userId,
-      syncPageUpdate
+      syncPageUpdate,
+      onEssentialActivity
     ]
   )
 
@@ -1450,7 +1460,18 @@ export default function WritiEditor({
         {/* Page Cover Display - Full Width */}
         {currentPage?.coverImage && (
           <PageCoverDisplay
-            cover={JSON.parse(currentPage.coverImage) as PageCover}
+            cover={(() => {
+              try {
+                // Try to parse as JSON first (regular pages and new essential pages)
+                return JSON.parse(currentPage.coverImage) as PageCover
+              } catch {
+                // If parsing fails, treat as a simple URL string (legacy essential pages)
+                return {
+                  type: "image" as const,
+                  url: currentPage.coverImage
+                } as PageCover
+              }
+            })()}
             onChangeCover={() => setIsCoverPickerOpen(true)}
             onRemoveCover={() => onUpdatePage({ coverImage: null })}
           />
@@ -1721,7 +1742,18 @@ export default function WritiEditor({
         onClose={() => setIsCoverPickerOpen(false)}
         currentCover={
           currentPage?.coverImage
-            ? (JSON.parse(currentPage.coverImage) as PageCover)
+            ? (() => {
+                try {
+                  // Try to parse as JSON first (regular pages and new essential pages)
+                  return JSON.parse(currentPage.coverImage) as PageCover
+                } catch {
+                  // If parsing fails, treat as a simple URL string (legacy essential pages)
+                  return {
+                    type: "image" as const,
+                    url: currentPage.coverImage
+                  } as PageCover
+                }
+              })()
             : undefined
         }
         onCoverSelect={cover => {

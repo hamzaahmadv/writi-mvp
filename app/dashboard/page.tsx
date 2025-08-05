@@ -39,7 +39,8 @@ export default function DashboardPage() {
     useEssentialSync(userId)
 
   // Essential pages recovery from Supabase
-  const { recoverEssentialPages } = useEssentialRecovery(userId)
+  const { recoverEssentialPages, updateLastActivityTime } =
+    useEssentialRecovery(userId)
 
   // Essentials selection state
   const [selectedEssential, setSelectedEssential] = useState<string | null>(
@@ -83,6 +84,67 @@ export default function DashboardPage() {
       }
     }
   }, [userId, essentialPages])
+
+  // Listen for essential pages recovery completion
+  useEffect(() => {
+    const handleRecoveryComplete = (event: CustomEventInit) => {
+      const { userId: recoveredUserId, pages: recoveredPages } =
+        event.detail || {}
+      if (recoveredUserId === userId && recoveredPages) {
+        console.log(
+          "📦 Recovery completed, merging with current state:",
+          recoveredPages.map((p: EssentialPage) => ({
+            id: p.id,
+            title: p.title,
+            hasCover: !!p.coverImage
+          }))
+        )
+
+        // Intelligent merge with current state - preserve local changes
+        setEssentialPages(currentPages => {
+          const merged = [...currentPages]
+
+          recoveredPages.forEach((recoveredPage: EssentialPage) => {
+            const existingIndex = merged.findIndex(
+              p => p.id === recoveredPage.id
+            )
+            if (existingIndex === -1) {
+              // Add new page
+              merged.push(recoveredPage)
+            } else {
+              // Merge intelligently - preserve local changes
+              const existing = merged[existingIndex]
+              merged[existingIndex] = {
+                ...recoveredPage, // Base from recovery
+                ...existing, // Preserve local changes
+                // Keep local data if it exists, otherwise use recovered
+                title: existing.title || recoveredPage.title,
+                emoji: existing.emoji || recoveredPage.emoji,
+                coverImage: existing.coverImage || recoveredPage.coverImage
+              }
+            }
+          })
+
+          console.log(
+            "📦 Final merged state:",
+            merged.map(p => ({
+              id: p.id,
+              title: p.title,
+              hasCover: !!p.coverImage
+            }))
+          )
+          return merged
+        })
+      }
+    }
+
+    window.addEventListener("essentialPagesRecovered", handleRecoveryComplete)
+    return () =>
+      window.removeEventListener(
+        "essentialPagesRecovered",
+        handleRecoveryComplete
+      )
+  }, [userId])
 
   // Load essential pages from localStorage with duplicate prevention
   useEffect(() => {
@@ -152,8 +214,24 @@ export default function DashboardPage() {
               `essential-pages-${userId}`,
               JSON.stringify(uniquePages)
             )
+            console.log(
+              "📱 Loading essential pages from localStorage (after migration):",
+              uniquePages.map((p: EssentialPage) => ({
+                id: p.id,
+                title: p.title,
+                hasCover: !!p.coverImage
+              }))
+            )
             setEssentialPages(uniquePages)
           } else {
+            console.log(
+              "📱 Loading essential pages from localStorage:",
+              parsed.map((p: EssentialPage) => ({
+                id: p.id,
+                title: p.title,
+                hasCover: !!p.coverImage
+              }))
+            )
             setEssentialPages(parsed)
           }
         } catch (error) {
@@ -288,6 +366,9 @@ export default function DashboardPage() {
 
   const updateEssential = useCallback(
     async (id: string, updates: Partial<EssentialPage>): Promise<void> => {
+      // Track user activity to prevent recovery race conditions
+      updateLastActivityTime()
+
       const updatedPages = essentialPages.map(page =>
         page.id === id ? { ...page, ...updates } : page
       )
@@ -304,7 +385,7 @@ export default function DashboardPage() {
         })
       }
     },
-    [essentialPages, saveEssentialPages, syncPageUpdate]
+    [essentialPages, saveEssentialPages, syncPageUpdate, updateLastActivityTime]
   )
 
   const deleteEssential = useCallback(
@@ -671,6 +752,7 @@ export default function DashboardPage() {
             onUpdatePage={handleUpdateEssentialPage}
             isEssential={selectedEssential !== null}
             onBackToDocuments={() => setSelectedEssential(null)}
+            onEssentialActivity={updateLastActivityTime} // Track essential page activity
             isPreloaded={
               selectedEssential
                 ? preloadedEssentials.has(selectedEssential) // Don't add prefix
