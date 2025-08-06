@@ -64,7 +64,7 @@ export default function PageIcon({
 
   return (
     <>
-      <div className="mb-4 flex justify-center">
+      <div className="mb-4">
         {currentIcon ? (
           // Show the current icon (emoji or Lucide icon)
           <button
@@ -75,11 +75,11 @@ export default function PageIcon({
             {renderCurrentIcon()}
           </button>
         ) : (
-          // Show "Add icon" button
+          // Show "Add icon" button - positioned above the title, left-aligned
           <Button
             variant="ghost"
             onClick={() => setIsPickerOpen(true)}
-            className="group flex items-center space-x-2 rounded-lg px-4 py-3 text-gray-600 transition-colors hover:bg-gray-100"
+            className="group flex items-center space-x-2 rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100"
           >
             <Smile className="size-5 transition-transform group-hover:scale-110" />
             <span className="text-sm font-medium">Add icon</span>
