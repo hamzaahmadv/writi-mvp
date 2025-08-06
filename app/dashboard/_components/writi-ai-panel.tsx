@@ -14,7 +14,8 @@ import {
   Globe,
   AtSign,
   TrendingUp,
-  MapPin
+  MapPin,
+  X
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -26,7 +27,12 @@ const quickPrompts = [
   "Give me a summary of my notes"
 ]
 
-export function WritiAiPanel() {
+interface WritiAiPanelProps {
+  onClose?: () => void
+  isOpen?: boolean
+}
+
+export function WritiAiPanel({ onClose, isOpen = true }: WritiAiPanelProps) {
   const [prompt, setPrompt] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
@@ -60,18 +66,30 @@ export function WritiAiPanel() {
         }}
       >
         <div
-          className="flex items-center justify-between border-b p-6"
+          className="flex items-center justify-between border-b p-4"
           style={{ borderColor: "var(--color-border-light)" }}
         >
-          <h2
-            className="figma-text-primary text-lg"
-            style={{
-              fontFamily: "var(--font-body)",
-              fontWeight: "var(--font-weight-semibold)"
-            }}
-          >
-            Writi AI
-          </h2>
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-gray-600" />
+            <h2
+              className="figma-text-primary text-base"
+              style={{
+                fontFamily: "var(--font-body)",
+                fontWeight: "var(--font-weight-semibold)"
+              }}
+            >
+              Writi AI
+            </h2>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="rounded p-1 transition-colors hover:bg-gray-100"
+              aria-label="Close AI panel"
+            >
+              <X className="size-4 text-gray-600" />
+            </button>
+          )}
         </div>
       </div>
     )
@@ -87,19 +105,40 @@ export function WritiAiPanel() {
     >
       {/* Header */}
       <div
-        className="border-b px-6 py-4"
+        className="flex items-center justify-between border-b p-4"
         style={{ borderColor: "var(--color-border-light)" }}
       >
-        <h2
-          className="figma-text-primary text-lg"
-          style={{
-            fontFamily: "var(--font-body)",
-            fontWeight: "var(--font-weight-semibold)",
-            fontSize: "18px"
-          }}
-        >
-          Writi AI
-        </h2>
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-4 text-gray-600" />
+          <h2
+            className="figma-text-primary text-base"
+            style={{
+              fontFamily: "var(--font-body)",
+              fontWeight: "var(--font-weight-semibold)"
+            }}
+          >
+            Writi AI
+          </h2>
+        </div>
+        <div className="flex items-center gap-1">
+          {/* Add button placeholder */}
+          <button
+            className="rounded p-1 transition-colors hover:bg-gray-100"
+            aria-label="Add new"
+          >
+            <Plus className="size-4 text-gray-600" />
+          </button>
+          {/* Close button */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="rounded p-1 transition-colors hover:bg-gray-100"
+              aria-label="Close AI panel"
+            >
+              <X className="size-4 text-gray-600" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Ask Me Anything Section */}

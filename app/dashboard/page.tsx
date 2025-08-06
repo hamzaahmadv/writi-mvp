@@ -12,7 +12,7 @@ import { useEssentialRecovery } from "@/lib/hooks/use-essential-recovery"
 import { SelectPage } from "@/db/schema"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { MessageSquare, Star, MoreHorizontal } from "lucide-react"
+import { MessageSquare, Star, MoreHorizontal, Sparkles } from "lucide-react"
 
 export default function DashboardPage() {
   // Navigation and URL state
@@ -740,6 +740,15 @@ export default function DashboardPage() {
     return 260
   })
 
+  // AI Panel visibility state
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("ai-panel-open")
+      return saved !== null ? JSON.parse(saved) : true
+    }
+    return true
+  })
+
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
   const startXRef = useRef(0)
@@ -753,6 +762,11 @@ export default function DashboardPage() {
   useEffect(() => {
     localStorage.setItem("sidebar-width", sidebarWidth.toString())
   }, [sidebarWidth])
+
+  // Save AI panel state to localStorage
+  useEffect(() => {
+    localStorage.setItem("ai-panel-open", JSON.stringify(isAiPanelOpen))
+  }, [isAiPanelOpen])
 
   // Handle sidebar resize
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -879,7 +893,23 @@ export default function DashboardPage() {
         </div>
 
         {/* Right Sidebar - Writi AI Panel */}
-        <WritiAiPanel />
+        {isAiPanelOpen && (
+          <WritiAiPanel
+            onClose={() => setIsAiPanelOpen(false)}
+            isOpen={isAiPanelOpen}
+          />
+        )}
+
+        {/* Toggle button when AI panel is closed */}
+        {!isAiPanelOpen && (
+          <button
+            onClick={() => setIsAiPanelOpen(true)}
+            className="group absolute right-4 top-4 z-20 rounded-lg bg-white p-2 shadow-md transition-all hover:shadow-lg"
+            aria-label="Open Writi AI"
+          >
+            <Sparkles className="size-5 text-gray-600 group-hover:text-gray-800" />
+          </button>
+        )}
       </div>
     </div>
   )
