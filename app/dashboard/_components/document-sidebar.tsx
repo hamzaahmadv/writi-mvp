@@ -111,6 +111,8 @@ interface DocumentSidebarProps {
   ) => Promise<void>
   onDeleteEssential?: (id: string) => Promise<void>
   selectedEssential?: string | null
+  onToggleSidebar?: () => void
+  isSidebarOpen?: boolean
 }
 
 export function DocumentSidebar({
@@ -127,7 +129,9 @@ export function DocumentSidebar({
   onCreateEssential,
   onUpdateEssential,
   onDeleteEssential,
-  selectedEssential
+  selectedEssential,
+  onToggleSidebar,
+  isSidebarOpen = true
 }: DocumentSidebarProps) {
   const { userId } = useCurrentUser()
   const {
@@ -319,7 +323,7 @@ export function DocumentSidebar({
           mx-2 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-all duration-200
           ${
             isMainNav
-              ? "border border-gray-200 bg-white shadow-sm hover:shadow-md"
+              ? "min-w-0 border border-gray-200 bg-white shadow-sm hover:shadow-md"
               : `hover:bg-gray-100 ${
                   (isEssential && selectedEssential === item.id) ||
                   (!isEssential && selectedItem === item.id) ||
@@ -967,7 +971,7 @@ export function DocumentSidebar({
 
   return (
     <div
-      className="figma-bg-primary flex w-64 flex-col border-r"
+      className="figma-bg-primary flex size-full flex-col border-r"
       style={{
         backgroundColor: "var(--color-bg-primary)",
         borderColor: "var(--color-border-light)"
@@ -978,22 +982,46 @@ export function DocumentSidebar({
         className="p-4"
         style={{ borderBottom: "1px solid var(--color-border-light)" }}
       >
-        <div className="mb-4 flex items-center gap-2">
-          <ChevronDown className="figma-text-secondary size-4" />
-          <h1
-            className="figma-text-primary text-sm"
-            style={{
-              fontFamily: "var(--font-body)",
-              fontWeight: "var(--font-weight-semibold)",
-              fontSize: "14px"
-            }}
-          >
-            Writi guide
-          </h1>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ChevronDown className="figma-text-secondary size-4" />
+            <h1
+              className="figma-text-primary text-sm"
+              style={{
+                fontFamily: "var(--font-body)",
+                fontWeight: "var(--font-weight-semibold)",
+                fontSize: "14px"
+              }}
+            >
+              Writi guide
+            </h1>
+          </div>
+          {onToggleSidebar && (
+            <button
+              onClick={onToggleSidebar}
+              className="group rounded-md p-1.5 transition-colors hover:bg-gray-100"
+              aria-label="Close sidebar"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-gray-500 group-hover:text-gray-700"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <line x1="9" y1="3" x2="9" y2="21" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Main Navigation Cards */}
-        <div className="space-y-2">
+        <div className="space-y-2" style={{ maxWidth: "220px" }}>
           {navigationItems.map((item, index) => (
             <NavItemComponent
               key={`nav-${item.id}-${index}`}

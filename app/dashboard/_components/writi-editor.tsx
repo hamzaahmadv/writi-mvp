@@ -48,6 +48,8 @@ interface WritiEditorProps {
   onBackToDocuments?: () => void
   isPreloaded?: boolean
   onEssentialActivity?: () => void // Track essential page activity
+  isSidebarOpen?: boolean
+  onToggleSidebar?: () => void
 }
 
 export default function WritiEditor({
@@ -56,7 +58,9 @@ export default function WritiEditor({
   isEssential = false,
   onBackToDocuments,
   isPreloaded = false,
-  onEssentialActivity
+  onEssentialActivity,
+  isSidebarOpen = true,
+  onToggleSidebar
 }: WritiEditorProps) {
   // Authentication
   const { userId, isLoaded: userLoaded } = useCurrentUser()
@@ -1185,7 +1189,9 @@ export default function WritiEditor({
 
         {/* Content Skeleton */}
         <div className="flex-1 overflow-auto bg-white">
-          <div className="mx-auto max-w-3xl px-24 py-8">
+          <div
+            className={`mx-auto px-24 py-8 transition-all duration-300 ${!isSidebarOpen ? "max-w-4xl" : "max-w-3xl"}`}
+          >
             <div className="mt-8 flex flex-col">
               {/* Title Skeleton */}
               <div className="space-y-3">
@@ -1507,7 +1513,9 @@ export default function WritiEditor({
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 overflow-auto bg-white">
+      <div
+        className={`flex-1 overflow-auto bg-white transition-all duration-300 ${!isSidebarOpen ? "w-full" : ""}`}
+      >
         {/* Page Cover Display - Full Width */}
         {currentPage?.coverImage && (
           <PageCoverDisplay
@@ -1528,7 +1536,9 @@ export default function WritiEditor({
           />
         )}
 
-        <div className="mx-auto max-w-3xl px-24 py-8">
+        <div
+          className={`mx-auto px-24 py-8 transition-all duration-300 ${!isSidebarOpen ? "max-w-4xl" : "max-w-3xl"}`}
+        >
           {/* Page Icon - Only show if it exists */}
           {(currentPage.icon || currentPage.emoji) && (
             <PageIcon

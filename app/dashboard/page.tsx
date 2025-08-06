@@ -723,29 +723,144 @@ export default function DashboardPage() {
     }
   }
 
+  // Sidebar visibility and width state with localStorage persistence
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sidebar-open")
+      return saved !== null ? JSON.parse(saved) : true
+    }
+    return true
+  })
+
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("sidebar-width")
+      return saved !== null ? parseInt(saved, 10) : 260
+    }
+    return 260
+  })
+
+  const [isResizing, setIsResizing] = useState(false)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const startXRef = useRef(0)
+  const startWidthRef = useRef(0)
+
+  // Save sidebar state to localStorage
+  useEffect(() => {
+    localStorage.setItem("sidebar-open", JSON.stringify(isSidebarOpen))
+  }, [isSidebarOpen])
+
+  useEffect(() => {
+    localStorage.setItem("sidebar-width", sidebarWidth.toString())
+  }, [sidebarWidth])
+
+  // Handle sidebar resize
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+    startXRef.current = e.clientX
+    startWidthRef.current = sidebarWidth
+  }
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return
+
+      const diff = e.clientX - startXRef.current
+      const newWidth = Math.min(
+        Math.max(180, startWidthRef.current + diff),
+        400
+      )
+      setSidebarWidth(newWidth)
+    }
+
+    const handleMouseUp = () => {
+      setIsResizing(false)
+    }
+
+    if (isResizing) {
+      document.addEventListener("mousemove", handleMouseMove)
+      document.addEventListener("mouseup", handleMouseUp)
+      document.body.style.cursor = "col-resize"
+      document.body.style.userSelect = "none"
+    }
+
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove)
+      document.removeEventListener("mouseup", handleMouseUp)
+      document.body.style.cursor = ""
+      document.body.style.userSelect = ""
+    }
+  }, [isResizing])
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="flex h-screen">
+      <div className="relative flex h-screen">
         {/* Left Sidebar - Navigation */}
-        <DocumentSidebar
-          currentPage={currentPage}
-          pages={pages}
-          essentialPages={essentialPages}
-          isLoading={pagesLoading}
-          onPageSelect={handlePageSelect}
-          onCreatePage={createPage}
-          onUpdatePage={updatePage}
-          onDeletePage={handleDeletePage}
-          onDuplicatePage={handleDuplicatePage}
-          onEssentialSelect={handleEssentialSelect}
-          onCreateEssential={createEssential}
-          onUpdateEssential={updateEssential}
-          onDeleteEssential={deleteEssential}
-          selectedEssential={selectedEssential}
-        />
+        {isSidebarOpen && (
+          <div
+            ref={sidebarRef}
+            className="relative z-30 h-full bg-white shadow-sm transition-all duration-300 ease-in-out"
+            style={{ width: `${sidebarWidth}px` }}
+          >
+            <DocumentSidebar
+              currentPage={currentPage}
+              pages={pages}
+              essentialPages={essentialPages}
+              isLoading={pagesLoading}
+              onPageSelect={handlePageSelect}
+              onCreatePage={createPage}
+              onUpdatePage={updatePage}
+              onDeletePage={handleDeletePage}
+              onDuplicatePage={handleDuplicatePage}
+              onEssentialSelect={handleEssentialSelect}
+              onCreateEssential={createEssential}
+              onUpdateEssential={updateEssential}
+              onDeleteEssential={deleteEssential}
+              selectedEssential={selectedEssential}
+              onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+              isSidebarOpen={isSidebarOpen}
+            />
+
+            {/* Resize handle */}
+            <div
+              className="group absolute right-0 top-0 h-full w-1 cursor-col-resize transition-colors hover:bg-blue-400"
+              onMouseDown={handleMouseDown}
+              style={{
+                backgroundColor: isResizing ? "rgb(96 165 250)" : "transparent"
+              }}
+            >
+              <div className="absolute right-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-gray-300 opacity-0 transition-opacity group-hover:opacity-100" />
+            </div>
+          </div>
+        )}
+
+        {/* Toggle button when sidebar is closed */}
+        {!isSidebarOpen && (
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="group absolute left-4 top-4 z-20 rounded-lg bg-white p-2 shadow-md transition-all hover:shadow-lg"
+            aria-label="Open sidebar"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-gray-600 group-hover:text-gray-800"
+            >
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+          </button>
+        )}
 
         {/* Main Editor Area */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col transition-all duration-300">
           <WritiEditor
             key={`${selectedEssential || currentPage?.id || "loading"}`}
             currentPage={getDisplayPage()}
@@ -758,6 +873,8 @@ export default function DashboardPage() {
                 ? preloadedEssentials.has(selectedEssential) // Don't add prefix
                 : true
             }
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
           />
         </div>
 
