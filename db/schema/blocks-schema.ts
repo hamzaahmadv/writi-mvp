@@ -27,6 +27,7 @@ export const blockTypeEnum = pgEnum("block_type", [
   "code",
   "quote",
   "image",
+  "video",
   "divider"
 ])
 

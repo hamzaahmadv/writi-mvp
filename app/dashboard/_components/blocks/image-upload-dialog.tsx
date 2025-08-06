@@ -207,7 +207,7 @@ export function ImageUploadDialog({
           {/* Upload Progress */}
           {isUploading && (
             <div className="space-y-2">
-              <Progress value={undefined} className="h-2" />
+              <Progress value={50} className="h-2 animate-pulse" />
               <p className="text-sm font-medium text-gray-800">
                 Uploading image...
               </p>

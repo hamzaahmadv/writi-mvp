@@ -15,6 +15,11 @@ const nextConfig = {
         pathname: "/storage/v1/object/public/**"
       }
     ]
+  },
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '100mb' // Allow 100MB for video uploads
+    }
   }
 }
 

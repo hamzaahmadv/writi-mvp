@@ -28,6 +28,7 @@ export type BlockType =
   | "code"
   | "quote"
   | "image"
+  | "video"
   | "divider"
 
 export interface BlockConfig {

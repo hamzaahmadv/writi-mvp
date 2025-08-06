@@ -10,6 +10,7 @@ import {
   Code,
   Quote,
   Image,
+  Video,
   Minus,
   Hash,
   FileText
@@ -114,6 +115,14 @@ export const blockConfigs: Record<BlockType, BlockConfig> = {
     defaultContent: "",
     supportsChildren: false
   },
+  video: {
+    type: "video",
+    label: "Video",
+    icon: Video,
+    description: "Upload or embed a video.",
+    defaultContent: "",
+    supportsChildren: false
+  },
   divider: {
     type: "divider",
     label: "Divider",
@@ -164,6 +173,8 @@ export const getBlockPlaceholder = (type: BlockType): string => {
       return "Quote"
     case "image":
       return "Click to upload image"
+    case "video":
+      return "Click to add video"
     case "divider":
       return ""
     default:

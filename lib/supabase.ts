@@ -22,11 +22,18 @@ if (!supabaseAnonKey) {
 // Client-side Supabase client
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// For server actions, create a new client each time
+// For server actions, we use the anon key
+// The storage bucket has RLS policies that allow authenticated and anon users to upload
 export const createServerSupabaseClient = () => {
+  console.log(
+    "🔐 Creating server Supabase client with anon key (RLS policies handle permissions)"
+  )
+
   return createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
-      persistSession: false
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
     }
   })
 }

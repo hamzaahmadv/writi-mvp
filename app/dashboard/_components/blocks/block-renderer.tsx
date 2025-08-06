@@ -10,7 +10,9 @@ import {
   ChevronDown,
   ChevronRight,
   AlertCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Video as VideoIcon,
+  Play
 } from "lucide-react"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
@@ -20,6 +22,7 @@ import { getBlockPlaceholder } from "@/lib/block-configs"
 import { useCopyToClipboard } from "@/lib/hooks/use-copy-to-clipboard"
 import { toast } from "sonner"
 import { ImageUploadDialog } from "./image-upload-dialog"
+import { VideoUploadDialog } from "./video-upload-dialog"
 
 interface BlockRendererProps {
   block: Block
@@ -43,6 +46,7 @@ export function BlockRenderer({
   const [isToggleExpanded, setIsToggleExpanded] = useState(true)
   const [isHovered, setIsHovered] = useState(false)
   const [showImageUploadDialog, setShowImageUploadDialog] = useState(false)
+  const [showVideoUploadDialog, setShowVideoUploadDialog] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
   const isComposingRef = useRef(false)
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -659,6 +663,71 @@ export function BlockRenderer({
               onOpenChange={setShowImageUploadDialog}
               onImageUploaded={imageUrl => {
                 actions.updateBlock(block.id, { content: imageUrl })
+              }}
+            />
+          </>
+        )
+
+      case "video":
+        return (
+          <>
+            <div className="space-y-2">
+              {block.content ? (
+                <div className="relative">
+                  {/* Check if it's an embed URL (contains embed or iframe patterns) */}
+                  {block.content.includes("embed") ||
+                  block.content.includes("iframe") ||
+                  block.content.includes("youtube.com/embed") ||
+                  block.content.includes("player.vimeo.com") ? (
+                    <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-gray-200">
+                      <iframe
+                        src={block.content}
+                        className="size-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  ) : (
+                    <video
+                      src={block.content}
+                      controls
+                      className="h-auto max-w-full rounded-lg border border-gray-200 shadow-sm"
+                      preload="metadata"
+                      onError={e => {
+                        ;(e.target as HTMLVideoElement).style.display = "none"
+                      }}
+                    >
+                      Your browser does not support the video tag.
+                    </video>
+                  )}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="absolute right-2 top-2 opacity-75 hover:opacity-100"
+                    onClick={() => setShowVideoUploadDialog(true)}
+                  >
+                    Replace
+                  </Button>
+                </div>
+              ) : (
+                <div
+                  className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 p-12 transition-colors hover:bg-gray-100"
+                  onClick={() => setShowVideoUploadDialog(true)}
+                >
+                  <div className="text-center">
+                    <VideoIcon className="mx-auto mb-3 size-12 text-gray-400" />
+                    <div className="text-sm text-gray-500">
+                      {getBlockPlaceholder("video")}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <VideoUploadDialog
+              open={showVideoUploadDialog}
+              onOpenChange={setShowVideoUploadDialog}
+              onVideoAdded={videoData => {
+                actions.updateBlock(block.id, { content: videoData.url })
               }}
             />
           </>
