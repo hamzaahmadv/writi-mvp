@@ -37,9 +37,13 @@ export function CommentsSection({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const animatedCommentsRef = useRef<Set<string>>(new Set())
 
+  // Check if this is an essential page - they won't have loading animations
+  const isEssentialPage = pageId.startsWith("essential-")
+
   // Always show if there are existing comments (Notion-like behavior)
   // Only hide if no comments AND not explicitly visible
-  const shouldShow = hasComments || isVisible || isLoading
+  // For essential pages, don't show loading state
+  const shouldShow = hasComments || isVisible || (!isEssentialPage && isLoading)
 
   // Auto-scroll to bottom when new comments are added
   useEffect(() => {

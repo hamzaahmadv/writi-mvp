@@ -33,6 +33,8 @@ export function useComments(
   blockId?: string | null
 ): UseCommentsResult {
   const [comments, setComments] = useState<SelectComment[]>([])
+  // Check if this is an essential page - start with no loading for them
+  const isEssentialPage = pageId.startsWith("essential-")
   const [isLoading, setIsLoading] = useState(false) // Start optimistically
   const [error, setError] = useState<string | null>(null)
   const { userId } = useCurrentUser()
@@ -42,6 +44,15 @@ export function useComments(
   // Load comments for the page/block with caching
   const loadComments = async () => {
     if (!pageId) return
+
+    // Essential pages start with no comments and no loading animation
+    if (isEssentialPage) {
+      setComments([])
+      setIsLoading(false)
+      // Don't attempt to load from database for essential pages
+      // They can still have comments created locally
+      return
+    }
 
     // Clean blockId - treat undefined, null, or empty string as null
     const cleanBlockId = blockId && blockId.trim() !== "" ? blockId : null
