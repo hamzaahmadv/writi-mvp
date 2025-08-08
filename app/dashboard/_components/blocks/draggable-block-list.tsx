@@ -170,6 +170,11 @@ export function DraggableBlockList({
     (e: React.MouseEvent) => {
       // Skip if clicking on @dnd-kit drag handles (GripVertical icons)
       const target = e.target as Element
+
+      // If slash menu is open and click is anywhere in blocks area (but not inside the menu), close it
+      if (editorState.showSlashMenu && !target.closest("[data-slash-menu]")) {
+        actions.hideSlashMenu()
+      }
       if (
         target.closest(
           "[data-dnd-kit-drag-handle], .cursor-grab, .cursor-grabbing"
@@ -221,7 +226,7 @@ export function DraggableBlockList({
         }
       }
     },
-    [actions]
+    [actions, editorState.showSlashMenu]
   )
 
   const handleMouseMove = useCallback(

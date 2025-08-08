@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Command,
@@ -32,6 +32,24 @@ export function SlashCommandMenu({
 }: SlashCommandMenuProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const menuRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Simple highlight helper for query matches (case-insensitive)
+  const highlightText = useCallback((text: string, q: string) => {
+    if (!q) return text
+    const idx = text.toLowerCase().indexOf(q.toLowerCase())
+    if (idx === -1) return text
+    const before = text.slice(0, idx)
+    const match = text.slice(idx, idx + q.length)
+    const after = text.slice(idx + q.length)
+    return (
+      <>
+        {before}
+        <span className="text-blue-600">{match}</span>
+        {after}
+      </>
+    )
+  }, [])
 
   // Generate commands from block configs
   const commands: SlashCommand[] = Object.values(blockConfigs).map(config => ({
@@ -45,12 +63,27 @@ export function SlashCommandMenu({
   }))
 
   // Filter commands based on query
-  const filteredCommands = commands.filter(
-    command =>
-      command.label.toLowerCase().includes(query.toLowerCase()) ||
-      command.description?.toLowerCase().includes(query.toLowerCase()) ||
-      command.shortcut?.toLowerCase().includes(query.toLowerCase())
+  const filteredCommands = useMemo(
+    () =>
+      commands.filter(
+        command =>
+          command.label.toLowerCase().includes(query.toLowerCase()) ||
+          command.description?.toLowerCase().includes(query.toLowerCase()) ||
+          command.shortcut?.toLowerCase().includes(query.toLowerCase())
+      ),
+    [commands, query]
   )
+
+  // When menu opens, autofocus the input and reset selection to first item
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedIndex(0)
+      // Focus the input on the next frame so arrows drive the menu
+      requestAnimationFrame(() => {
+        inputRef.current?.focus()
+      })
+    }
+  }, [isOpen])
 
   // Handle keyboard navigation
   useEffect(() => {
@@ -69,6 +102,14 @@ export function SlashCommandMenu({
           setSelectedIndex(prev =>
             prev > 0 ? prev - 1 : filteredCommands.length - 1
           )
+          break
+        case "Home":
+          e.preventDefault()
+          setSelectedIndex(0)
+          break
+        case "End":
+          e.preventDefault()
+          setSelectedIndex(Math.max(0, filteredCommands.length - 1))
           break
         case "Enter":
           e.preventDefault()
@@ -91,6 +132,14 @@ export function SlashCommandMenu({
   useEffect(() => {
     setSelectedIndex(0)
   }, [query])
+
+  // Ensure the selected item is visible when navigating
+  useEffect(() => {
+    if (!menuRef.current) return
+    const items = menuRef.current.querySelectorAll('[data-slash-item="true"]')
+    const selected = items[selectedIndex] as HTMLElement | undefined
+    selected?.scrollIntoView({ block: "nearest" })
+  }, [selectedIndex])
 
   // Position menu to avoid viewport overflow
   const getMenuStyle = () => {
@@ -122,27 +171,42 @@ export function SlashCommandMenu({
 
   return (
     <AnimatePresence>
+      {/* Click-away backdrop to ensure outside clicks close the menu */}
+      <motion.div
+        key="slash-backdrop"
+        className="fixed inset-0 z-40 bg-transparent"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onMouseDown={onClose}
+      />
       <motion.div
         ref={menuRef}
         data-slash-menu
-        initial={{ opacity: 0, y: 8, scale: 0.95 }}
+        initial={{ opacity: 0, y: 6, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 8, scale: 0.95 }}
-        transition={{ duration: 0.15 }}
-        className="fixed z-50 rounded-lg border border-gray-200 bg-white shadow-xl backdrop-blur-sm"
+        exit={{ opacity: 0, y: 6, scale: 0.98 }}
+        transition={{ type: "spring", stiffness: 380, damping: 28 }}
+        className="fixed z-50 rounded-xl border border-gray-200/80 bg-white/95 shadow-2xl backdrop-blur supports-[backdrop-filter]:bg-white/90"
         style={getMenuStyle()}
       >
-        <Command className="bg-transparent">
+        <Command className="relative bg-transparent">
           <CommandInput
+            ref={inputRef}
             placeholder="Type to filter blocks..."
             value={query}
             onValueChange={onQueryChange}
-            className="border-0 border-b border-gray-100 p-3 text-sm focus:ring-0"
+            className="border-0 border-b border-gray-100 p-3 text-sm placeholder:text-gray-400 focus:ring-0"
           />
           <CommandList className="max-h-80 overflow-y-auto">
             <CommandEmpty className="py-6 text-center text-sm text-gray-500">
               No blocks found.
             </CommandEmpty>
+            {filteredCommands.length > 0 && (
+              <div className="sticky top-0 z-10 border-b bg-white/95 px-3 pb-1 pt-2 text-[11px] font-medium text-gray-500 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+                Basic blocks
+              </div>
+            )}
             <CommandGroup>
               {filteredCommands.map((command, index) => {
                 const IconComponent = command.icon
@@ -151,27 +215,36 @@ export function SlashCommandMenu({
                     key={command.id}
                     value={command.label}
                     onSelect={() => onSelectCommand(command)}
-                    className="mx-2 my-1 flex cursor-pointer items-center gap-3 rounded-md p-3 transition-all duration-150 hover:bg-gray-100 aria-selected:bg-transparent data-[selected=true]:bg-transparent [&[aria-selected=true]]:bg-transparent [&[data-selected=true]]:bg-transparent"
-                    style={{
-                      backgroundColor: "transparent"
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.backgroundColor = "rgb(243 244 246)" // gray-100
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.backgroundColor = "transparent"
-                    }}
+                    data-slash-item="true"
+                    data-selected={selectedIndex === index}
+                    className={`relative mx-2 my-1 flex cursor-pointer items-center gap-3 rounded-md p-3 transition-all duration-150 hover:bg-gray-100 ${
+                      selectedIndex === index
+                        ? "bg-gray-50 ring-1 ring-gray-200"
+                        : "bg-transparent"
+                    }`}
+                    onMouseEnter={() => setSelectedIndex(index)}
+                    onMouseMove={() => setSelectedIndex(index)}
                   >
+                    {/* Left accent for selected item */}
+                    <div
+                      className={`absolute left-0 top-0 h-full w-1 rounded-l-md transition-opacity ${
+                        selectedIndex === index
+                          ? "bg-blue-500 opacity-100"
+                          : "opacity-0"
+                      }`}
+                    />
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-gray-100">
                       <IconComponent className="size-4 text-gray-600" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="font-medium text-gray-900">
-                        {command.label}
+                        {highlightText(command.label, query)}
                       </div>
                       {command.description && (
                         <div className="mt-0.5 text-sm text-gray-500">
-                          {command.description}
+                          {typeof command.description === "string"
+                            ? highlightText(command.description, query)
+                            : command.description}
                         </div>
                       )}
                     </div>
@@ -185,6 +258,9 @@ export function SlashCommandMenu({
               })}
             </CommandGroup>
           </CommandList>
+
+          {/* Bottom fade for nicer scroll end */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-white to-transparent" />
         </Command>
       </motion.div>
     </AnimatePresence>

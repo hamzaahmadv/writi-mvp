@@ -903,11 +903,45 @@ export default function WritiEditor({
     ),
 
     hideSlashMenu: useCallback(() => {
-      setEditorState(prev => ({
-        ...prev,
-        showSlashMenu: false,
-        slashMenuQuery: ""
-      }))
+      setEditorState(prev => {
+        const focusedId = prev.focusedBlockId
+        // Close the menu and then restore focus back to the current block
+        requestAnimationFrame(() => {
+          if (!focusedId) return
+          const blockElement = document.querySelector(
+            `[data-block-id="${focusedId}"] [contenteditable]`
+          ) as HTMLElement | null
+          if (blockElement) {
+            blockElement.focus()
+            // Place caret at end if selection is lost
+            const selection = window.getSelection()
+            const range = document.createRange()
+            try {
+              if (blockElement.firstChild) {
+                range.selectNodeContents(blockElement)
+                range.collapse(false)
+              } else {
+                range.setStart(blockElement, 0)
+                range.setEnd(blockElement, 0)
+              }
+              selection?.removeAllRanges()
+              selection?.addRange(range)
+            } catch {
+              // Fallback to end
+              range.selectNodeContents(blockElement)
+              range.collapse(false)
+              selection?.removeAllRanges()
+              selection?.addRange(range)
+            }
+          }
+        })
+
+        return {
+          ...prev,
+          showSlashMenu: false,
+          slashMenuQuery: ""
+        }
+      })
     }, []),
 
     executeSlashCommand: useCallback(
