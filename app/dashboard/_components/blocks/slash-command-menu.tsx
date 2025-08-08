@@ -62,17 +62,35 @@ export function SlashCommandMenu({
     action: () => {}
   }))
 
-  // Filter commands based on query
-  const filteredCommands = useMemo(
-    () =>
-      commands.filter(
-        command =>
-          command.label.toLowerCase().includes(query.toLowerCase()) ||
-          command.description?.toLowerCase().includes(query.toLowerCase()) ||
-          command.shortcut?.toLowerCase().includes(query.toLowerCase())
-      ),
-    [commands, query]
-  )
+  // Filter + rank commands based on query for better relevance
+  const filteredCommands = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return commands
+
+    const score = (cmd: SlashCommand, index: number) => {
+      const label = cmd.label.toLowerCase()
+      const desc = (cmd.description || "").toLowerCase()
+      const shortcut = (cmd.shortcut || "").toLowerCase()
+
+      let s = 0
+      if (label === q) s = Math.max(s, 100)
+      if (shortcut === q) s = Math.max(s, 95)
+      if (label.startsWith(q)) s = Math.max(s, 90)
+      if (shortcut.startsWith(q)) s = Math.max(s, 85)
+      if (label.includes(q)) s = Math.max(s, 80)
+      if (shortcut.includes(q)) s = Math.max(s, 70)
+      if (desc.includes(q)) s = Math.max(s, 40)
+
+      // Tie-break toward earlier base order for predictability
+      return s + Math.max(0, 10 - index)
+    }
+
+    return commands
+      .map((c, i) => ({ c, s: score(c, i), i }))
+      .filter(x => x.s > 0)
+      .sort((a, b) => (b.s === a.s ? a.i - b.i : b.s - a.s))
+      .map(x => x.c)
+  }, [commands, query])
 
   // When menu opens, autofocus the input and reset selection to first item
   useEffect(() => {
@@ -204,7 +222,7 @@ export function SlashCommandMenu({
             </CommandEmpty>
             {filteredCommands.length > 0 && (
               <div className="sticky top-0 z-10 border-b bg-white/95 px-3 pb-1 pt-2 text-[11px] font-medium text-gray-500 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-                Basic blocks
+                {query.trim() ? "Filtered results" : "Basic blocks"}
               </div>
             )}
             <CommandGroup>
