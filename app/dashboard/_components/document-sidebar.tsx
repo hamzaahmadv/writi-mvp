@@ -575,7 +575,7 @@ export function DocumentSidebar({
     const { page } = favorite
     // Handle highlighting for both essential and regular pages
     const isSelected = page.id.startsWith("essential-")
-      ? selectedEssential === page.id.replace("essential-", "")
+      ? selectedEssential === page.id
       : currentPage?.id === page.id && !selectedEssential
 
     return (
@@ -595,8 +595,7 @@ export function DocumentSidebar({
             onClick={() => {
               // Handle essential pages differently from regular pages
               if (page.id.startsWith("essential-")) {
-                const essentialId = page.id.replace("essential-", "")
-                handleEssentialSelect(essentialId)
+                handleEssentialSelect(page.id)
               } else {
                 handlePageSelect(page.id)
               }

@@ -70,11 +70,9 @@ export default function DashboardPage() {
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
       if (key?.startsWith(prefix)) {
-        // Extract the page ID from the key
-        const pageId = key
-          .replace(prefix, "")
-          .replace("essential-", "")
-          .replace("-blocks", "")
+        // Extract the page ID from the key by removing only the known prefix
+        // Keep the full ID (including the "essential-" prefix) for accurate matching
+        const pageId = key.slice(prefix.length)
 
         // If this page ID doesn't exist in our current essential pages, remove it
         if (!validPageIds.has(pageId)) {
@@ -723,31 +721,28 @@ export default function DashboardPage() {
     }
   }
 
-  // Sidebar visibility and width state with localStorage persistence
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("sidebar-open")
-      return saved !== null ? JSON.parse(saved) : true
-    }
-    return true
-  })
+  // Sidebar visibility and width state (SSR-safe defaults)
+  // Load persisted values from localStorage after mount to avoid hydration mismatch
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [sidebarWidth, setSidebarWidth] = useState(260)
 
-  const [sidebarWidth, setSidebarWidth] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("sidebar-width")
-      return saved !== null ? parseInt(saved, 10) : 260
-    }
-    return 260
-  })
+  // AI Panel visibility state (SSR-safe default)
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(true)
+  // Load persisted UI state after mount (client-only)
+  useEffect(() => {
+    try {
+      const savedOpen = localStorage.getItem("sidebar-open")
+      if (savedOpen !== null) setIsSidebarOpen(JSON.parse(savedOpen))
 
-  // AI Panel visibility state
-  const [isAiPanelOpen, setIsAiPanelOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("ai-panel-open")
-      return saved !== null ? JSON.parse(saved) : true
+      const savedWidth = localStorage.getItem("sidebar-width")
+      if (savedWidth !== null) setSidebarWidth(parseInt(savedWidth, 10))
+
+      const savedAi = localStorage.getItem("ai-panel-open")
+      if (savedAi !== null) setIsAiPanelOpen(JSON.parse(savedAi))
+    } catch (e) {
+      // ignore read errors
     }
-    return true
-  })
+  }, [])
 
   const [isResizing, setIsResizing] = useState(false)
   const sidebarRef = useRef<HTMLDivElement>(null)
