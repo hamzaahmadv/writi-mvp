@@ -113,6 +113,28 @@ User Action → localStorage (0ms) → UI Update → Background Sync (1s delay) 
 - Context-aware with access to current page/block state
 - Non-blocking operations that don't interfere with editing
 
+### Comments System
+The comments system supports both regular pages and essential pages with optimized loading behavior:
+
+#### Architecture
+- **Database Storage**: Comments stored in PostgreSQL with page/block associations
+- **Optimistic Updates**: Immediate UI updates with temporary IDs, then database sync
+- **Caching**: 5-minute cache for comment data with automatic invalidation
+- **Event-Driven**: Uses CustomEvents for cross-component communication
+
+#### Essential Pages Optimization
+- **No Loading Animation**: Essential pages skip loading state since they start with no comments
+- **Full Functionality**: Essential pages support all comment features (create, edit, delete, resolve)
+- **Smart Detection**: Uses `pageId.startsWith("essential-")` to identify essential pages
+- **Progressive Enhancement**: Comments UI appears when first comment is created
+
+#### Implementation Files
+- `lib/hooks/use-comments.tsx` - Core comment operations with caching
+- `components/comments/comments-section.tsx` - Main comments UI component
+- `components/comments/comment-display.tsx` - Individual comment rendering
+- `components/comments/horizontal-comment-input.tsx` - Comment input component
+- `db/schema/comments-schema.ts` - Database schema and relationships
+
 ## Essential Pages Implementation Guide
 
 ### Architecture Overview
@@ -404,21 +426,60 @@ NEXT_PUBLIC_STRIPE_PORTAL_LINK=
 - **Memory Management**: Auto-cleanup of timeouts and event listeners
 
 ## Current Development Focus
-Based on recent commits and git status, active development areas include:
-- **Essential Pages Hybrid System**: Completed localStorage + Supabase sync implementation
-- **Cross-Device Synchronization**: Essential pages now sync across devices
-- **Background Sync Infrastructure**: Robust offline-first sync with retry logic
-- **Performance Optimization**: ~10-20ms essential page load times achieved
-- Comments system implementation
-- Cover image uploads and storage
-- Enhanced block actions and editor features
+Based on recent commits and git status (as of January 2025), active development areas include:
+- **Comments System Optimization**: Enhanced comment loading and UI interactions
+- **Essential Pages Refinements**: Improved title handling and block persistence
+- **UI/UX Improvements**: Floating header interactions and panel controls
+- **Media Block Support**: Video upload functionality and image block dialogs
+- **Performance Optimization**: Essential pages now maintain ~10-20ms load times
+- **Cross-Device Synchronization**: Robust sync across devices with offline support
 
 ### Recent Major Features Completed
 - ✅ **Hybrid Essential Pages**: localStorage + Supabase dual-layer storage
-- ✅ **Background Sync**: Debounced sync with offline queue support
+- ✅ **Background Sync**: Debounced sync with offline queue support  
 - ✅ **Visual Sync Status**: Real-time sync indicators in editor header
 - ✅ **Cross-Device Recovery**: Automatic population from Supabase on app startup
 - ✅ **Error Handling**: Multi-level fallbacks with comprehensive retry logic
+- ✅ **Comments Loading Optimization**: No loading animations for essential pages with no comments
+- ✅ **Video Upload Support**: Full video block functionality with upload handling
+- ✅ **Floating Header UX**: Improved hover zones and interaction areas
+- ✅ **Panel Management**: Left/right panel controls with proper state management
+- ✅ **Page Title Handling**: Enhanced title behavior for essential pages
+- ✅ **Block Persistence**: Reliable block saving across page reloads for essential pages
+
+### Latest Updates (Recent Commits)
+
+#### Comments System Improvements
+- **Comments Loading Fix**: Essential pages no longer show loading animations for comments since they start with no comments in the database
+- **Comment UI Support**: Essential pages now support full comment functionality while avoiding unnecessary loading states
+- **Comments Persistence**: Enhanced comment handling with proper optimistic updates
+
+#### Essential Pages Enhancements  
+- **Title Handling**: Improved page title behavior and focus management for essential pages
+- **Block Persistence**: Fixed block losing issues after development server restarts
+- **Duplicate Prevention**: Enhanced deduplication logic for essential pages
+- **localStorage Management**: Better cleanup and persistence handling
+
+#### UI/UX Refinements
+- **Floating Header**: Fixed hover zones and z-index issues for better interaction
+- **Panel Controls**: Implemented left/right panel open/close functionality
+- **Page Icon Alignment**: Improved icon positioning and visual consistency
+- **New Pages View**: Enhanced page creation and navigation experience
+
+#### Media Block Support
+- **Video Upload**: Complete video block implementation with upload functionality
+- **Image Block Dialogs**: Enhanced UI for image block configuration
+- **Media Handling**: Robust file upload and validation for media content
+
+### Performance Characteristics (Updated)
+
+#### Current Metrics
+- **Essential page load**: ~10-20ms (localStorage + instant UI)
+- **Regular page load**: ~200-500ms (database with optimistic updates)
+- **Comment loading**: Instant for essential pages (no loading animation)
+- **Block persistence**: 100ms debounced saves with immediate UI updates
+- **Cross-device sync**: ~500ms-2s with automatic conflict resolution
+- **Media uploads**: Progressive upload with real-time progress indicators
 
 ## Claude Code Hooks & Settings
 
