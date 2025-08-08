@@ -229,6 +229,7 @@ export default function WritiEditor({
   const [showCommentInput, setShowCommentInput] = useState(false)
   const [commentUserInteracted, setCommentUserInteracted] = useState(false)
   const titleRef = useRef<HTMLHeadingElement>(null)
+  const justPressedEnterRef = useRef(false)
 
   // Icon picker state
   const [isIconPickerOpen, setIsIconPickerOpen] = useState(false)
@@ -257,6 +258,29 @@ export default function WritiEditor({
       setTitleIsEmpty(isEmpty)
     }
   }, [currentPage?.id, currentPage?.title])
+
+  // Auto-focus title for empty titles on initial load (especially for new essential pages)
+  useEffect(() => {
+    if (
+      isEssential &&
+      currentPage &&
+      (currentPage.title === "" || !currentPage.title.trim()) &&
+      !currentBlocksLoading
+    ) {
+      // Focus at the start of the title so the caret blinks at the first character
+      requestAnimationFrame(() => {
+        titleRef.current?.focus()
+        const selection = window.getSelection()
+        if (selection && titleRef.current) {
+          const range = document.createRange()
+          range.selectNodeContents(titleRef.current)
+          range.collapse(true) // place caret at start
+          selection.removeAllRanges()
+          selection.addRange(range)
+        }
+      })
+    }
+  }, [isEssential, currentPage?.id, currentPage?.title, currentBlocksLoading])
 
   // Reset user interaction flags when page changes
   useEffect(() => {
@@ -566,28 +590,34 @@ export default function WritiEditor({
       markWelcomeContentCreated(currentPage.id)
 
       if (isEssential) {
-        // Create initial content for essentials
-        createEssentialBlock(undefined, "heading_1").then(blockId => {
-          if (blockId) {
-            updateEssentialBlock(blockId, {
-              content: currentPage.id.includes("todo")
-                ? "To-do List / Planner"
-                : "Getting Started"
-            })
-            // Create a paragraph block below
-            setTimeout(() => {
-              createEssentialBlock(blockId, "paragraph").then(paragraphId => {
-                if (paragraphId) {
-                  updateEssentialBlock(paragraphId, {
-                    content: currentPage.id.includes("todo")
-                      ? "Create and manage your tasks efficiently. Start typing to add your first task..."
-                      : "Welcome to Writi AI! This is your quick start guide. Start typing to customize this content..."
-                  })
-                }
+        // Only built-in essentials get initial content; custom essentials start with no blocks
+        const isBuiltIn =
+          currentPage.id === "essential-todo" ||
+          currentPage.id === "essential-getting-started"
+
+        if (isBuiltIn) {
+          createEssentialBlock(undefined, "heading_1").then(blockId => {
+            if (blockId) {
+              updateEssentialBlock(blockId, {
+                content: currentPage.id.includes("todo")
+                  ? "To-do List / Planner"
+                  : "Getting Started"
               })
-            }, 100)
-          }
-        })
+              // Create a paragraph block below
+              setTimeout(() => {
+                createEssentialBlock(blockId, "paragraph").then(paragraphId => {
+                  if (paragraphId) {
+                    updateEssentialBlock(paragraphId, {
+                      content: currentPage.id.includes("todo")
+                        ? "Create and manage your tasks efficiently. Start typing to add your first task..."
+                        : "Welcome to Writi AI! This is your quick start guide. Start typing to customize this content..."
+                    })
+                  }
+                })
+              }, 100)
+            }
+          })
+        }
       } else {
         // Create a simple paragraph block for new pages
         createBlockInDb(undefined, "paragraph").then(blockId => {
@@ -1577,98 +1607,138 @@ export default function WritiEditor({
               hasCover={!!currentPage?.coverImage}
             >
               <div className="space-y-3">
-                <h1
-                  ref={titleRef}
-                  className={`text-4xl font-bold outline-none transition-colors ${
-                    titleIsEmpty && !titleIsFocused
-                      ? "text-gray-400"
-                      : "text-gray-900"
-                  }`}
-                  contentEditable
-                  suppressContentEditableWarning={true}
-                  onFocus={() => {
-                    setTitleIsFocused(true)
-                    setUserInteracted(true)
-                    // If the title is placeholder text, select all for easy replacement
-                    if (titleIsEmpty) {
-                      setTimeout(() => {
-                        const range = document.createRange()
-                        const selection = window.getSelection()
-                        if (titleRef.current && selection) {
-                          range.selectNodeContents(titleRef.current)
-                          selection.removeAllRanges()
-                          selection.addRange(range)
-                        }
-                      })
-                    }
-                  }}
-                  onBlur={e => {
-                    setTitleIsFocused(false)
-                    const newTitle =
-                      e.currentTarget.textContent?.trim() || "New Page"
-                    setTitleIsEmpty(
-                      newTitle === "New Page" ||
-                        newTitle === "Untitled" ||
-                        !newTitle.trim()
-                    )
-                    if (newTitle !== currentPage.title) {
-                      onUpdatePage({ title: newTitle })
-                    }
-                  }}
-                  onKeyDown={async e => {
-                    if (e.key === "Enter") {
-                      e.preventDefault()
+                <div className="relative">
+                  {/* Light gray placeholder behind the title text */}
+                  {titleIsEmpty && (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 select-none text-4xl font-bold text-gray-200"
+                      style={{
+                        lineHeight: "1.2",
+                        zIndex: 0
+                      }}
+                    >
+                      New page
+                    </span>
+                  )}
 
-                      // Save title immediately
-                      const newTitle =
-                        e.currentTarget.textContent?.trim() || "New page"
+                  <h1
+                    ref={titleRef}
+                    className={`relative z-10 text-4xl font-bold outline-none transition-colors ${
+                      titleIsEmpty && !titleIsFocused
+                        ? "text-transparent"
+                        : "text-gray-900"
+                    }`}
+                    contentEditable
+                    suppressContentEditableWarning={true}
+                    onFocus={() => {
+                      setTitleIsFocused(true)
+                      setUserInteracted(true)
+                      // If the title is empty, place the caret at the start so it blinks on the first character
+                      if (titleIsEmpty) {
+                        setTimeout(() => {
+                          const selection = window.getSelection()
+                          if (titleRef.current && selection) {
+                            const range = document.createRange()
+                            range.selectNodeContents(titleRef.current)
+                            range.collapse(true) // caret at start
+                            selection.removeAllRanges()
+                            selection.addRange(range)
+                          }
+                        })
+                      }
+                    }}
+                    onBlur={e => {
+                      setTitleIsFocused(false)
+                      const raw = e.currentTarget.textContent?.trim() || ""
+                      const newTitle = isEssential ? raw : raw || "New Page"
+                      setTitleIsEmpty(
+                        newTitle === "New Page" ||
+                          newTitle === "Untitled" ||
+                          !newTitle.trim()
+                      )
                       if (newTitle !== currentPage.title) {
                         onUpdatePage({ title: newTitle })
                       }
-
-                      // Blur title to remove focus
-                      titleRef.current?.blur()
-
-                      // Create and focus new paragraph block at first position
-                      await actions.createBlock(
-                        "first",
-                        "paragraph",
-                        true // auto-focus on user interaction
-                      )
-                    }
-                  }}
-                  onInput={e => {
-                    const content = e.currentTarget.textContent?.trim() || ""
-                    setTitleIsEmpty(
-                      !content ||
-                        content === "New Page" ||
-                        content === "Untitled"
-                    )
-                  }}
-                  onPaste={e => {
-                    e.preventDefault()
-                    const plainText = e.clipboardData.getData("text/plain")
-                    if (plainText) {
-                      const selection = window.getSelection()
-                      if (selection && selection.rangeCount > 0) {
-                        const range = selection.getRangeAt(0)
-                        range.deleteContents()
-                        const textNode = document.createTextNode(plainText)
-                        range.insertNode(textNode)
-                        range.setStartAfter(textNode)
-                        range.setEndAfter(textNode)
-                        selection.removeAllRanges()
-                        selection.addRange(range)
+                      // Keep the caret blinking in the title until the user types
+                      if (
+                        isEssential &&
+                        !newTitle.trim() &&
+                        !justPressedEnterRef.current
+                      ) {
+                        setTimeout(() => {
+                          titleRef.current?.focus()
+                          const selection = window.getSelection()
+                          if (selection && titleRef.current) {
+                            const range = document.createRange()
+                            range.selectNodeContents(titleRef.current)
+                            range.collapse(true)
+                            selection.removeAllRanges()
+                            selection.addRange(range)
+                          }
+                        })
                       }
-                    }
-                  }}
-                  style={{
-                    fontFamily: "var(--font-body)",
-                    lineHeight: "1.2"
-                  }}
-                >
-                  {currentPage.title || "New page"}
-                </h1>
+                    }}
+                    onKeyDown={async e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+
+                        // Save title immediately
+                        const raw = e.currentTarget.textContent?.trim() || ""
+                        const newTitle = isEssential ? raw : raw || "New page"
+                        if (newTitle !== currentPage.title) {
+                          onUpdatePage({ title: newTitle })
+                        }
+
+                        // Blur title to remove focus
+                        titleRef.current?.blur()
+
+                        // Create and focus new paragraph block at first position
+                        justPressedEnterRef.current = true
+                        await actions.createBlock(
+                          "first",
+                          "paragraph",
+                          true // auto-focus on user interaction
+                        )
+                        // Allow refocus logic after block is created
+                        setTimeout(() => {
+                          justPressedEnterRef.current = false
+                        }, 0)
+                      }
+                    }}
+                    onInput={e => {
+                      const content = e.currentTarget.textContent?.trim() || ""
+                      setTitleIsEmpty(
+                        !content ||
+                          content === "New Page" ||
+                          content === "Untitled"
+                      )
+                    }}
+                    onPaste={e => {
+                      e.preventDefault()
+                      const plainText = e.clipboardData.getData("text/plain")
+                      if (plainText) {
+                        const selection = window.getSelection()
+                        if (selection && selection.rangeCount > 0) {
+                          const range = selection.getRangeAt(0)
+                          range.deleteContents()
+                          const textNode = document.createTextNode(plainText)
+                          range.insertNode(textNode)
+                          range.setStartAfter(textNode)
+                          range.setEndAfter(textNode)
+                          selection.removeAllRanges()
+                          selection.addRange(range)
+                        }
+                      }
+                    }}
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      lineHeight: "1.2"
+                    }}
+                  >
+                    {currentPage.title}
+                  </h1>
+                </div>
 
                 {/* Comments Section */}
                 <CommentsSection

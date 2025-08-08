@@ -313,7 +313,8 @@ export default function DashboardPage() {
     async (title?: string, emoji?: string): Promise<EssentialPage | null> => {
       if (!userId) return null
 
-      let proposedTitle = title || "New Essential"
+      // Start custom essential titles empty to show the large background placeholder
+      let proposedTitle = title !== undefined ? title : ""
 
       // If no custom title provided, generate a unique title
       if (!title) {
@@ -325,7 +326,7 @@ export default function DashboardPage() {
           counter++
           proposedTitle = `${baseTitle} ${counter}`
         }
-      } else {
+      } else if (title) {
         // If a custom title is provided, check for duplicates and warn
         const existingPage = essentialPages.find(
           page => page.title === proposedTitle
