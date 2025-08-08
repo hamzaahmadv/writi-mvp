@@ -960,12 +960,42 @@ export default function WritiEditor({
             })
           }
 
+          // Close the menu, mark user interaction, and restore focus
+          setUserInteracted(true)
           setEditorState(prev => ({
             ...prev,
             showSlashMenu: false,
             slashMenuQuery: "",
             focusedBlockId: blockId
           }))
+
+          // Ensure caret blinks in the updated block
+          requestAnimationFrame(() => {
+            const blockElement = document.querySelector(
+              `[data-block-id="${blockId}"] [contenteditable]`
+            ) as HTMLElement | null
+            if (blockElement) {
+              blockElement.focus()
+              const selection = window.getSelection()
+              const range = document.createRange()
+              try {
+                if (blockElement.firstChild) {
+                  range.selectNodeContents(blockElement)
+                  range.collapse(false)
+                } else {
+                  range.setStart(blockElement, 0)
+                  range.setEnd(blockElement, 0)
+                }
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+              } catch {
+                range.selectNodeContents(blockElement)
+                range.collapse(false)
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+              }
+            }
+          })
         } catch (error) {
           console.error("Failed to execute slash command:", error)
         }
