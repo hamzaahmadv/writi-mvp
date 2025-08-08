@@ -749,23 +749,75 @@ export default function WritiEditor({
     deleteBlock: useCallback(
       async (id: string) => {
         try {
+          // Find the index of the block to be deleted
+          const blockIndex = currentBlocks.findIndex(block => block.id === id)
+          const previousBlock =
+            blockIndex > 0 ? currentBlocks[blockIndex - 1] : null
+
           if (isEssential) {
             await deleteEssentialBlock(id)
           } else {
             await deleteBlockInDb(id)
           }
 
-          // Update focus if the deleted block was focused
-          setEditorState(prev => ({
-            ...prev,
-            focusedBlockId:
-              prev.focusedBlockId === id ? null : prev.focusedBlockId
-          }))
+          // Update focus to the previous block if it exists
+          if (previousBlock) {
+            setEditorState(prev => ({
+              ...prev,
+              focusedBlockId: previousBlock.id
+            }))
+
+            // Focus the previous block's content editable element
+            requestAnimationFrame(() => {
+              const blockElement = document.querySelector(
+                `[data-block-id="${previousBlock.id}"] [contenteditable]`
+              ) as HTMLElement
+              if (blockElement) {
+                blockElement.focus()
+
+                // Position cursor at the end of the content
+                const selection = window.getSelection()
+                const range = document.createRange()
+
+                if (blockElement.lastChild) {
+                  const lastNode = blockElement.lastChild
+                  const textLength = lastNode.textContent?.length || 0
+
+                  try {
+                    if (lastNode.nodeType === Node.TEXT_NODE) {
+                      range.setStart(lastNode, textLength)
+                      range.setEnd(lastNode, textLength)
+                    } else {
+                      range.selectNodeContents(blockElement)
+                      range.collapse(false)
+                    }
+                  } catch {
+                    // Fallback: position at end
+                    range.selectNodeContents(blockElement)
+                    range.collapse(false)
+                  }
+                } else {
+                  // Empty block - position at start
+                  range.selectNodeContents(blockElement)
+                  range.collapse(false)
+                }
+
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+              }
+            })
+          } else {
+            // No previous block, clear focus
+            setEditorState(prev => ({
+              ...prev,
+              focusedBlockId: null
+            }))
+          }
         } catch (error) {
           console.error("Failed to delete block:", error)
         }
       },
-      [isEssential, deleteEssentialBlock, deleteBlockInDb]
+      [isEssential, deleteEssentialBlock, deleteBlockInDb, currentBlocks]
     ),
 
     moveBlock: useCallback(
