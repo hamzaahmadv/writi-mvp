@@ -1,6 +1,12 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import {
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  useLayoutEffect
+} from "react"
 import { motion } from "framer-motion"
 import {
   MoreHorizontal,
@@ -253,34 +259,72 @@ export default function WritiEditor({
     if (currentPage) {
       const isEmpty =
         currentPage.title === "New Page" ||
+        currentPage.title === "New page" ||
         currentPage.title === "Untitled" ||
         !currentPage.title.trim()
       setTitleIsEmpty(isEmpty)
     }
   }, [currentPage?.id, currentPage?.title])
 
-  // Auto-focus title for empty titles on initial load (especially for new essential pages)
-  useEffect(() => {
-    if (
-      isEssential &&
-      currentPage &&
-      (currentPage.title === "" || !currentPage.title.trim()) &&
-      !currentBlocksLoading
-    ) {
-      // Focus at the start of the title so the caret blinks at the first character
-      requestAnimationFrame(() => {
-        titleRef.current?.focus()
+  // Auto-focus title for empty titles on initial load and maintain focus (until user types)
+  useLayoutEffect(() => {
+    if (!isEssential || !currentPage) return
+    const isEmptyTitle =
+      !currentPage.title ||
+      !currentPage.title.trim() ||
+      currentPage.title === "New Page" ||
+      currentPage.title === "New page" ||
+      currentPage.title === "Untitled"
+    if (!isEmptyTitle) return
+
+    // Focus at the start of the title so the caret blinks at the first character
+    const focusTitleStart = () => {
+      if (!titleRef.current) return
+
+      // Only focus if not already focused to prevent cursor reset
+      if (document.activeElement !== titleRef.current) {
+        titleRef.current.focus()
+
+        // Set cursor position to start
         const selection = window.getSelection()
         if (selection && titleRef.current) {
           const range = document.createRange()
           range.selectNodeContents(titleRef.current)
-          range.collapse(true) // place caret at start
+          range.collapse(true) // Collapse to start
           selection.removeAllRanges()
           selection.addRange(range)
         }
-      })
+      }
     }
-  }, [isEssential, currentPage?.id, currentPage?.title, currentBlocksLoading])
+
+    // Initial focus with multiple attempts to ensure it works
+    focusTitleStart()
+    setTimeout(focusTitleStart, 10)
+    setTimeout(focusTitleStart, 50)
+    requestAnimationFrame(() => {
+      focusTitleStart()
+      requestAnimationFrame(focusTitleStart)
+    })
+
+    // Keep caret blinking by ensuring title remains focused if still empty
+    const interval = setInterval(() => {
+      if (!titleRef.current) return
+
+      const stillEmpty =
+        !titleRef.current.textContent ||
+        !titleRef.current.textContent.trim() ||
+        titleRef.current.textContent === "New Page" ||
+        titleRef.current.textContent === "New page"
+
+      if (stillEmpty && document.activeElement !== titleRef.current) {
+        focusTitleStart()
+      } else if (!stillEmpty) {
+        clearInterval(interval)
+      }
+    }, 100) // Reduced interval for more responsive focus maintenance
+
+    return () => clearInterval(interval)
+  }, [isEssential, currentPage?.id])
 
   // Reset user interaction flags when page changes
   useEffect(() => {
@@ -1624,7 +1668,7 @@ export default function WritiEditor({
 
                   <h1
                     ref={titleRef}
-                    className={`relative z-10 text-4xl font-bold outline-none transition-colors ${
+                    className={`relative z-10 min-h-[1.2em] w-full text-4xl font-bold caret-gray-900 outline-none transition-colors ${
                       titleIsEmpty && !titleIsFocused
                         ? "text-transparent"
                         : "text-gray-900"
@@ -1654,30 +1698,15 @@ export default function WritiEditor({
                       const newTitle = isEssential ? raw : raw || "New Page"
                       setTitleIsEmpty(
                         newTitle === "New Page" ||
+                          newTitle === "New page" ||
                           newTitle === "Untitled" ||
                           !newTitle.trim()
                       )
                       if (newTitle !== currentPage.title) {
                         onUpdatePage({ title: newTitle })
                       }
-                      // Keep the caret blinking in the title until the user types
-                      if (
-                        isEssential &&
-                        !newTitle.trim() &&
-                        !justPressedEnterRef.current
-                      ) {
-                        setTimeout(() => {
-                          titleRef.current?.focus()
-                          const selection = window.getSelection()
-                          if (selection && titleRef.current) {
-                            const range = document.createRange()
-                            range.selectNodeContents(titleRef.current)
-                            range.collapse(true)
-                            selection.removeAllRanges()
-                            selection.addRange(range)
-                          }
-                        })
-                      }
+                      // Don't re-focus here - let the interval handle it
+                      // This prevents conflicting focus operations
                     }}
                     onKeyDown={async e => {
                       if (e.key === "Enter") {
@@ -1711,6 +1740,7 @@ export default function WritiEditor({
                       setTitleIsEmpty(
                         !content ||
                           content === "New Page" ||
+                          content === "New page" ||
                           content === "Untitled"
                       )
                     }}

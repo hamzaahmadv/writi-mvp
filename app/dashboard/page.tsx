@@ -521,6 +521,24 @@ export default function DashboardPage() {
       setPreloadedEssentials(
         prev => new Set([...prev, essentialId]) // Don't add prefix - ID already has it
       )
+
+      // Proactively prime focus on the title immediately after navigation to ensure caret blinks instantly
+      setTimeout(() => {
+        const titleEl = document.querySelector(
+          'h1[contenteditable="true"]'
+        ) as HTMLElement | null
+        if (titleEl) {
+          titleEl.focus()
+          const selection = window.getSelection()
+          if (selection) {
+            const range = document.createRange()
+            range.selectNodeContents(titleEl)
+            range.collapse(true)
+            selection.removeAllRanges()
+            selection.addRange(range)
+          }
+        }
+      }, 0)
     },
     [updatePageState]
   )
