@@ -235,22 +235,14 @@ export function SlashCommandMenu({
                     onSelect={() => onSelectCommand(command)}
                     data-slash-item="true"
                     data-selected={selectedIndex === index}
-                    className={`relative mx-2 my-1 flex cursor-pointer items-center gap-3 rounded-md p-3 transition-all duration-150 hover:bg-gray-100 ${
+                    className={`mx-2 my-1 flex cursor-pointer items-center gap-3 rounded-md p-3 transition-colors duration-150 hover:!bg-gray-100 focus:!bg-gray-100 aria-selected:!bg-gray-100 data-[selected=true]:!bg-gray-100 data-[selected=true]:text-gray-900 ${
                       selectedIndex === index
-                        ? "bg-gray-50 ring-1 ring-gray-200"
+                        ? "!bg-gray-100"
                         : "bg-transparent"
                     }`}
                     onMouseEnter={() => setSelectedIndex(index)}
                     onMouseMove={() => setSelectedIndex(index)}
                   >
-                    {/* Left accent for selected item */}
-                    <div
-                      className={`absolute left-0 top-0 h-full w-1 rounded-l-md transition-opacity ${
-                        selectedIndex === index
-                          ? "bg-blue-500 opacity-100"
-                          : "opacity-0"
-                      }`}
-                    />
                     <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-gray-100">
                       <IconComponent className="size-4 text-gray-600" />
                     </div>
