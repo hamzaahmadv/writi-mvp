@@ -66,7 +66,7 @@ export function SafeFloatingHeader({
           {children}
           {/* Invisible hover zone to trigger first interaction */}
           <div
-            className="absolute inset-x-0 -top-12 z-10 h-24"
+            className="absolute inset-x-0 -top-12 z-30 h-24"
             onMouseEnter={handleInteraction}
           />
         </div>

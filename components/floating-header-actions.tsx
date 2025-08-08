@@ -40,7 +40,7 @@ export function FloatingHeaderActions({
         className={`absolute inset-x-0 h-24 ${hasCover ? "-top-10" : "-top-12"}`}
         style={{
           pointerEvents: "auto",
-          zIndex: -1
+          zIndex: 0 // keep below the menu so clicks on the menu are not blocked
         }}
         onMouseEnter={() => setIsVisible(true)}
         onMouseLeave={() => setIsVisible(false)}
@@ -90,7 +90,13 @@ export function FloatingHeaderActions({
       </AnimatePresence>
 
       {/* Content slot for title or children */}
-      <div className="relative">{children}</div>
+      <div
+        className="relative"
+        onMouseEnter={() => setIsVisible(true)}
+        onMouseLeave={() => setIsVisible(false)}
+      >
+        {children}
+      </div>
     </div>
   )
 }
