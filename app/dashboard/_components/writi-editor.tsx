@@ -1697,6 +1697,7 @@ export default function WritiEditor({
               onIconRemove={() => {
                 onUpdatePage({ emoji: null, icon: null })
               }}
+              hasCover={!!currentPage?.coverImage}
             />
           )}
 

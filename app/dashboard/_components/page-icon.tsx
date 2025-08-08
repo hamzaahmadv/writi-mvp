@@ -17,12 +17,14 @@ interface PageIconProps {
   currentIcon?: PageIconType
   onIconSelect: (icon: PageIconType) => void
   onIconRemove: () => void
+  hasCover?: boolean
 }
 
 export default function PageIcon({
   currentIcon,
   onIconSelect,
-  onIconRemove
+  onIconRemove,
+  hasCover = false
 }: PageIconProps) {
   const [isPickerOpen, setIsPickerOpen] = useState(false)
 
@@ -64,7 +66,7 @@ export default function PageIcon({
 
   return (
     <>
-      <div className="mb-4">
+      <div className={`${hasCover ? "-mt-4 mb-6" : "mb-8"}`}>
         {currentIcon ? (
           // Show the current icon (emoji or Lucide icon)
           <button
