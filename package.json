@@ -15,7 +15,8 @@
     "analyze": "ANALYZE=true npm run build",
     "db:generate": "npx drizzle-kit generate",
     "db:migrate": "npx drizzle-kit migrate",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "mcp:playwright": "npx @playwright/mcp --headless=false"
   },
   "dependencies": {
     "@clerk/backend": "^1.20.1",
@@ -83,6 +84,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@playwright/mcp": "^0.0.33",
     "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^20",
     "@types/react": "^16.8 || ^17.0 || ^18.0 || ^19.0",
