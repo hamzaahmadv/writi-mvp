@@ -1060,9 +1060,25 @@ export default function WritiEditor({
           const newBlocks = [...currentBlocks]
 
           // Find the insertion point
-          const insertIndex = insertAfterId
-            ? newBlocks.findIndex(b => b.id === insertAfterId) + 1
-            : newBlocks.length
+          let insertIndex: number
+          if (insertAfterId) {
+            const targetBlockIndex = newBlocks.findIndex(
+              b => b.id === insertAfterId
+            )
+            const targetBlock = newBlocks[targetBlockIndex]
+
+            // If the target block is empty, replace it instead of inserting after it
+            if (targetBlock && !targetBlock.content?.trim()) {
+              insertIndex = targetBlockIndex
+              // Remove the empty block that we're replacing
+              newBlocks.splice(targetBlockIndex, 1)
+            } else {
+              // Insert after the target block
+              insertIndex = targetBlockIndex + 1
+            }
+          } else {
+            insertIndex = newBlocks.length
+          }
 
           // Create all new blocks at once
           const blocksToInsert: Block[] = []
@@ -1085,14 +1101,8 @@ export default function WritiEditor({
           newBlocks.splice(insertIndex, 0, ...blocksToInsert)
 
           if (isEssential) {
-            // Update localStorage with all new blocks
-            localStorage.setItem(
-              `essential-blocks-${currentPage?.id}`,
-              JSON.stringify(newBlocks)
-            )
-
-            // Trigger re-render to load from localStorage
-            setEditorState(prev => ({ ...prev }))
+            // Update essential blocks state, which will automatically save to localStorage
+            setEssentialBlocks(newBlocks)
           } else {
             // For regular pages, would need to implement bulk createBlockInDb
             // For now, focusing on essential pages
@@ -1117,7 +1127,7 @@ export default function WritiEditor({
         editorState.focusedBlockId,
         currentBlocks,
         isEssential,
-        createEssentialBlock
+        setEssentialBlocks
       ]
     ),
 
