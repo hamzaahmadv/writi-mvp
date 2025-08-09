@@ -463,41 +463,6 @@ export function DraggableBlockList({
               }}
             />
           )}
-
-          {/* Continuous selection overlay for selected blocks */}
-          {(() => {
-            const selectionBounds = getSelectionBounds()
-            return selectionBounds && !isSelecting ? (
-              <div
-                className="pointer-events-none absolute z-10 rounded-md border-2 border-blue-300 bg-blue-50/30"
-                style={{
-                  left: selectionBounds.left,
-                  top: selectionBounds.top,
-                  width: selectionBounds.width,
-                  height: selectionBounds.height
-                }}
-              />
-            ) : null
-          })()}
-
-          {/* Selection count indicator */}
-          {editorState.selectedBlockIds.length > 1 && !isSelecting && (
-            <div
-              className="pointer-events-none absolute z-20 rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white shadow-lg"
-              style={{
-                left: (() => {
-                  const selectionBounds = getSelectionBounds()
-                  return selectionBounds ? selectionBounds.left - 8 : 0
-                })(),
-                top: (() => {
-                  const selectionBounds = getSelectionBounds()
-                  return selectionBounds ? selectionBounds.top - 12 : 0
-                })()
-              }}
-            >
-              {editorState.selectedBlockIds.length} selected
-            </div>
-          )}
         </div>
       </SortableContext>
     </DndContext>

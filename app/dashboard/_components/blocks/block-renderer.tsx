@@ -780,7 +780,7 @@ export function BlockRenderer({
         group relative rounded-md border border-transparent p-1 transition-all duration-150
         ${isDragging ? "z-50 shadow-lg" : ""}
         ${isSelected ? "border-blue-200 bg-blue-50 shadow-sm" : ""}
-        ${isFocused && !isSelected ? "border-gray-200 bg-gray-50" : ""}
+        ${isFocused && !isSelected ? "border-gray-200" : ""}
       `}
       style={{
         marginLeft: level > 0 ? `${level * 24}px` : undefined,
