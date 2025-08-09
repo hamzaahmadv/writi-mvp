@@ -23,6 +23,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { toast } from "sonner"
 import { BlockRenderer } from "./blocks/block-renderer"
 import { DraggableBlockList } from "./blocks/draggable-block-list"
 import { SlashCommandMenu } from "./blocks/slash-command-menu"
@@ -941,6 +942,384 @@ export default function WritiEditor({
       deleteBlockInDb
     ]),
 
+    copySelectedBlocks: useCallback(async () => {
+      const selectedIds = editorState.selectedBlockIds
+      if (selectedIds.length === 0) return
+
+      // Get selected blocks in order
+      const selectedBlocks = currentBlocks.filter(block =>
+        selectedIds.includes(block.id)
+      )
+
+      if (selectedBlocks.length === 0) return
+
+      // Serialize blocks to clipboard
+      const clipboardData = {
+        type: "writi-blocks",
+        blocks: selectedBlocks.map(block => ({
+          type: block.type,
+          content: block.content,
+          props: block.props,
+          children: block.children
+        }))
+      }
+
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(clipboardData))
+        toast.success(
+          `Copied ${selectedBlocks.length} block${selectedBlocks.length > 1 ? "s" : ""}`
+        )
+      } catch (error) {
+        console.error("Failed to copy blocks:", error)
+        toast.error("Failed to copy blocks")
+      }
+    }, [editorState.selectedBlockIds, currentBlocks]),
+
+    cutSelectedBlocks: useCallback(async () => {
+      const selectedIds = editorState.selectedBlockIds
+      if (selectedIds.length === 0) return
+
+      // Get selected blocks in order
+      const selectedBlocks = currentBlocks.filter(block =>
+        selectedIds.includes(block.id)
+      )
+
+      if (selectedBlocks.length === 0) return
+
+      // Serialize blocks to clipboard
+      const clipboardData = {
+        type: "writi-blocks",
+        blocks: selectedBlocks.map(block => ({
+          type: block.type,
+          content: block.content,
+          props: block.props,
+          children: block.children
+        }))
+      }
+
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(clipboardData))
+
+        // Delete the blocks after copying
+        await Promise.all(
+          selectedIds.map(async blockId => {
+            if (isEssential) {
+              await deleteEssentialBlock(blockId)
+            } else {
+              await deleteBlockInDb(blockId)
+            }
+          })
+        )
+
+        // Clear selection
+        setEditorState(prev => ({
+          ...prev,
+          selectedBlockIds: [],
+          focusedBlockId: null
+        }))
+
+        toast.success(
+          `Cut ${selectedBlocks.length} block${selectedBlocks.length > 1 ? "s" : ""}`
+        )
+      } catch (error) {
+        console.error("Failed to cut blocks:", error)
+        toast.error("Failed to cut blocks")
+      }
+    }, [
+      editorState.selectedBlockIds,
+      currentBlocks,
+      isEssential,
+      deleteEssentialBlock,
+      deleteBlockInDb
+    ]),
+
+    pasteBlocks: useCallback(
+      async (afterId?: string) => {
+        try {
+          const clipboardText = await navigator.clipboard.readText()
+          const clipboardData = JSON.parse(clipboardText)
+
+          // Validate clipboard data
+          if (
+            clipboardData.type !== "writi-blocks" ||
+            !Array.isArray(clipboardData.blocks)
+          ) {
+            return
+          }
+
+          // Determine where to insert
+          const insertAfterId =
+            afterId ||
+            editorState.focusedBlockId ||
+            (currentBlocks.length > 0
+              ? currentBlocks[currentBlocks.length - 1].id
+              : undefined)
+
+          // Create new blocks with fresh IDs
+          const newBlockIds: string[] = []
+          const newBlocks = [...currentBlocks]
+
+          // Find the insertion point
+          const insertIndex = insertAfterId
+            ? newBlocks.findIndex(b => b.id === insertAfterId) + 1
+            : newBlocks.length
+
+          // Create all new blocks at once
+          const blocksToInsert: Block[] = []
+          for (const blockData of clipboardData.blocks) {
+            const newBlockId = `temp_${Date.now()}_${Math.random()}`
+            newBlockIds.push(newBlockId)
+
+            const newBlock: Block = {
+              id: newBlockId,
+              type: blockData.type,
+              content: blockData.content || "",
+              props: blockData.props || {},
+              children: [] // TODO: Handle nested children in future
+            }
+
+            blocksToInsert.push(newBlock)
+          }
+
+          // Insert all blocks at once
+          newBlocks.splice(insertIndex, 0, ...blocksToInsert)
+
+          if (isEssential) {
+            // Update localStorage with all new blocks
+            localStorage.setItem(
+              `essential-blocks-${currentPage?.id}`,
+              JSON.stringify(newBlocks)
+            )
+
+            // Trigger re-render to load from localStorage
+            setEditorState(prev => ({ ...prev }))
+          } else {
+            // For regular pages, would need to implement bulk createBlockInDb
+            // For now, focusing on essential pages
+          }
+
+          // Select the newly pasted blocks
+          setEditorState(prev => ({
+            ...prev,
+            selectedBlockIds: newBlockIds,
+            focusedBlockId: newBlockIds[newBlockIds.length - 1]
+          }))
+
+          toast.success(
+            `Pasted ${clipboardData.blocks.length} block${clipboardData.blocks.length > 1 ? "s" : ""}`
+          )
+        } catch (error) {
+          // Silently fail if clipboard doesn't contain valid block data
+          console.log("No valid block data in clipboard")
+        }
+      },
+      [
+        editorState.focusedBlockId,
+        currentBlocks,
+        isEssential,
+        createEssentialBlock
+      ]
+    ),
+
+    duplicateSelectedBlocks: useCallback(async () => {
+      const selectedIds = editorState.selectedBlockIds
+      if (selectedIds.length === 0) return
+
+      // Get selected blocks in order
+      const selectedBlocks = currentBlocks.filter(block =>
+        selectedIds.includes(block.id)
+      )
+
+      if (selectedBlocks.length === 0) return
+
+      try {
+        // Find the last selected block to insert duplicates after
+        const lastSelectedIndex = currentBlocks.findIndex(
+          block => block.id === selectedIds[selectedIds.length - 1]
+        )
+
+        // Create duplicates with fresh IDs
+        const newBlockIds: string[] = []
+        const duplicatedBlocks: Block[] = []
+
+        for (const block of selectedBlocks) {
+          const newBlockId = `temp_${Date.now()}_${Math.random()}`
+          newBlockIds.push(newBlockId)
+
+          const duplicatedBlock: Block = {
+            id: newBlockId,
+            type: block.type,
+            content: block.content,
+            props: { ...block.props },
+            children: [] // TODO: Handle nested children in future
+          }
+          duplicatedBlocks.push(duplicatedBlock)
+        }
+
+        if (isEssential) {
+          // Update state with new blocks inserted after the last selected
+          setEssentialBlocks(prev => {
+            const newBlocks = [...prev]
+            const insertIndex = lastSelectedIndex + 1
+            newBlocks.splice(insertIndex, 0, ...duplicatedBlocks)
+
+            // Save to localStorage
+            requestAnimationFrame(() => {
+              saveEssentialBlocks(newBlocks)
+            })
+
+            return newBlocks
+          })
+        } else {
+          // For regular pages, would need to implement createBlockInDb
+        }
+
+        // Select the newly duplicated blocks
+        setEditorState(prev => ({
+          ...prev,
+          selectedBlockIds: newBlockIds,
+          focusedBlockId: newBlockIds[0]
+        }))
+
+        toast.success(
+          `Duplicated ${selectedBlocks.length} block${selectedBlocks.length > 1 ? "s" : ""}`
+        )
+      } catch (error) {
+        console.error("Failed to duplicate blocks:", error)
+        toast.error("Failed to duplicate blocks")
+      }
+    }, [
+      editorState.selectedBlockIds,
+      currentBlocks,
+      isEssential,
+      setEssentialBlocks,
+      saveEssentialBlocks
+    ]),
+
+    moveSelectedBlocksUp: useCallback(async () => {
+      const selectedIds = editorState.selectedBlockIds
+      if (selectedIds.length === 0) return
+
+      // Get selected blocks in order they appear in the editor
+      const selectedBlocks = currentBlocks.filter(block =>
+        selectedIds.includes(block.id)
+      )
+
+      // Find the first selected block index
+      const firstSelectedIndex = currentBlocks.findIndex(
+        block => block.id === selectedBlocks[0].id
+      )
+
+      // Can't move up if already at the top
+      if (firstSelectedIndex <= 0) return
+
+      try {
+        if (isEssential) {
+          setEssentialBlocks(prev => {
+            const newBlocks = [...prev]
+
+            // Remove all selected blocks from their current positions
+            const blocksToMove = selectedBlocks.map(block => {
+              const index = newBlocks.findIndex(b => b.id === block.id)
+              return newBlocks.splice(index, 1)[0]
+            })
+
+            // Insert them one position up (before the block that was above the first selected)
+            const insertIndex = Math.max(0, firstSelectedIndex - 1)
+            newBlocks.splice(insertIndex, 0, ...blocksToMove)
+
+            // Save to localStorage
+            requestAnimationFrame(() => {
+              saveEssentialBlocks(newBlocks)
+            })
+
+            return newBlocks
+          })
+        } else {
+          // For regular pages, use existing moveBlockInDb logic
+          const targetBlock = currentBlocks[firstSelectedIndex - 1]
+          const firstSelectedBlock = selectedBlocks[0]
+          await moveBlockInDb(firstSelectedBlock.id, targetBlock.id, "before")
+        }
+
+        toast.success("Moved blocks up")
+      } catch (error) {
+        console.error("Failed to move blocks up:", error)
+        toast.error("Failed to move blocks")
+      }
+    }, [
+      editorState.selectedBlockIds,
+      currentBlocks,
+      isEssential,
+      setEssentialBlocks,
+      saveEssentialBlocks,
+      moveBlockInDb
+    ]),
+
+    moveSelectedBlocksDown: useCallback(async () => {
+      const selectedIds = editorState.selectedBlockIds
+      if (selectedIds.length === 0) return
+
+      // Get selected blocks in order they appear in the editor
+      const selectedBlocks = currentBlocks.filter(block =>
+        selectedIds.includes(block.id)
+      )
+
+      // Find the last selected block index
+      const lastSelectedIndex = currentBlocks.findIndex(
+        block => block.id === selectedBlocks[selectedBlocks.length - 1].id
+      )
+
+      // Can't move down if already at the bottom
+      if (lastSelectedIndex >= currentBlocks.length - 1) return
+
+      try {
+        if (isEssential) {
+          setEssentialBlocks(prev => {
+            const newBlocks = [...prev]
+
+            // Remove all selected blocks from their current positions
+            const blocksToMove = selectedBlocks.map(block => {
+              const index = newBlocks.findIndex(b => b.id === block.id)
+              return newBlocks.splice(index, 1)[0]
+            })
+
+            // Insert them one position down (after the block that was below the last selected)
+            // Adjust for the removed blocks
+            const insertIndex = Math.min(
+              newBlocks.length,
+              lastSelectedIndex - selectedBlocks.length + 2
+            )
+            newBlocks.splice(insertIndex, 0, ...blocksToMove)
+
+            // Save to localStorage
+            requestAnimationFrame(() => {
+              saveEssentialBlocks(newBlocks)
+            })
+
+            return newBlocks
+          })
+        } else {
+          // For regular pages, use existing moveBlockInDb logic
+          const targetBlock = currentBlocks[lastSelectedIndex + 1]
+          const lastSelectedBlock = selectedBlocks[selectedBlocks.length - 1]
+          await moveBlockInDb(lastSelectedBlock.id, targetBlock.id, "after")
+        }
+
+        toast.success("Moved blocks down")
+      } catch (error) {
+        console.error("Failed to move blocks down:", error)
+        toast.error("Failed to move blocks")
+      }
+    }, [
+      editorState.selectedBlockIds,
+      currentBlocks,
+      isEssential,
+      setEssentialBlocks,
+      saveEssentialBlocks,
+      moveBlockInDb
+    ]),
+
     showSlashMenu: useCallback(
       (blockId: string, position: { x: number; y: number }) => {
         setEditorState(prev => ({
@@ -1267,13 +1646,112 @@ export default function WritiEditor({
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [editorState.showSlashMenu, actions])
 
-  // Handle keyboard shortcuts for multi-block selection
+  // Handle keyboard shortcuts for multi-block selection and clipboard
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+A / Ctrl+A - Select all blocks
+      // Cmd+A / Ctrl+A - Smart selection behavior
       if (e.key === "a" && (e.metaKey || e.ctrlKey)) {
+        const activeElement = document.activeElement
+        const selection = window.getSelection()
+
+        // Check if we're in a contenteditable block
+        if (activeElement && activeElement.hasAttribute("contenteditable")) {
+          const blockElement = activeElement.closest("[data-block-id]")
+          const blockId = blockElement?.getAttribute("data-block-id")
+          const content = activeElement.textContent || ""
+
+          if (blockId && content.trim()) {
+            // Block has content
+            const hasTextSelection =
+              selection && selection.toString().length > 0
+            const isCurrentBlockSelected =
+              editorState.selectedBlockIds.includes(blockId)
+
+            if (!hasTextSelection && !isCurrentBlockSelected) {
+              // No text selected and block not selected → select all text in block
+              if (selection) {
+                selection.selectAllChildren(activeElement)
+                return // Don't prevent default, let browser handle text selection
+              }
+            } else if (hasTextSelection && !isCurrentBlockSelected) {
+              // Text is selected → select the current block
+              e.preventDefault()
+              actions.clearSelection()
+              actions.selectBlock(blockId)
+              return
+            }
+          }
+        }
+
+        // Default behavior: select all blocks
+        // This happens when:
+        // - Not in contenteditable
+        // - In empty block
+        // - Current block is already selected
         e.preventDefault()
         actions.selectAllBlocks()
+        return
+      }
+
+      // Cmd+C / Ctrl+C - Copy selected blocks
+      if (e.key === "c" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        if (editorState.selectedBlockIds.length > 0) {
+          e.preventDefault()
+          actions.copySelectedBlocks()
+          return
+        }
+      }
+
+      // Cmd+X / Ctrl+X - Cut selected blocks
+      if (e.key === "x" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        if (editorState.selectedBlockIds.length > 0) {
+          e.preventDefault()
+          actions.cutSelectedBlocks()
+          return
+        }
+      }
+
+      // Cmd+V / Ctrl+V - Paste blocks
+      if (e.key === "v" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        // Check if we're not in a contenteditable element (let normal paste work there)
+        const activeElement = document.activeElement
+        if (!activeElement || !activeElement.hasAttribute("contenteditable")) {
+          e.preventDefault()
+          actions.pasteBlocks()
+          return
+        }
+      }
+
+      // Cmd+D / Ctrl+D - Duplicate selected blocks
+      if (e.key === "d" && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
+        if (editorState.selectedBlockIds.length > 0) {
+          e.preventDefault()
+          actions.duplicateSelectedBlocks()
+          return
+        }
+      }
+
+      // Cmd+Shift+Up / Ctrl+Shift+Up - Move selected blocks up
+      if (
+        e.key === "ArrowUp" &&
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        editorState.selectedBlockIds.length > 0
+      ) {
+        e.preventDefault()
+        actions.moveSelectedBlocksUp()
+        return
+      }
+
+      // Cmd+Shift+Down / Ctrl+Shift+Down - Move selected blocks down
+      if (
+        e.key === "ArrowDown" &&
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        editorState.selectedBlockIds.length > 0
+      ) {
+        e.preventDefault()
+        actions.moveSelectedBlocksDown()
         return
       }
 
@@ -1297,7 +1775,12 @@ export default function WritiEditor({
       }
 
       // Arrow keys with Shift - Extend selection
-      if (e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown")) {
+      if (
+        e.shiftKey &&
+        !e.metaKey &&
+        !e.ctrlKey &&
+        (e.key === "ArrowUp" || e.key === "ArrowDown")
+      ) {
         e.preventDefault()
         const currentFocused = editorState.focusedBlockId
         if (currentFocused) {

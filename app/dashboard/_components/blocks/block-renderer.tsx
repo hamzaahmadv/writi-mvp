@@ -373,12 +373,26 @@ export function BlockRenderer({
 
   // Handle paste events to strip formatting and paste as plain text
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
-    e.preventDefault()
-
     // Get plain text from clipboard
     const plainText = e.clipboardData.getData("text/plain")
 
     if (plainText) {
+      // Check if it's our special JSON format for blocks
+      try {
+        const data = JSON.parse(plainText)
+        if (data.type === "writi-blocks" && Array.isArray(data.blocks)) {
+          // It's a block paste - prevent default and trigger block paste action
+          e.preventDefault()
+          actions.pasteBlocks(block.id)
+          return
+        }
+      } catch {
+        // Not JSON or not our format, proceed with normal paste
+      }
+
+      // Normal text paste - strip formatting
+      e.preventDefault()
+
       // Insert the plain text at cursor position
       const selection = window.getSelection()
       if (selection && selection.rangeCount > 0) {
@@ -763,8 +777,10 @@ export function BlockRenderer({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0, ease: "easeOut" }}
       className={`
-        group relative py-1 transition-all duration-150
+        group relative rounded-md border border-transparent p-1 transition-all duration-150
         ${isDragging ? "z-50 shadow-lg" : ""}
+        ${isSelected ? "border-blue-200 bg-blue-50 shadow-sm" : ""}
+        ${isFocused && !isSelected ? "border-gray-200 bg-gray-50" : ""}
       `}
       style={{
         marginLeft: level > 0 ? `${level * 24}px` : undefined,

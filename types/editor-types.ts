@@ -82,6 +82,12 @@ export interface EditorActions {
   selectAllBlocks: () => void
   clearSelection: () => void
   deleteSelectedBlocks: () => Promise<void>
+  copySelectedBlocks: () => Promise<void>
+  cutSelectedBlocks: () => Promise<void>
+  pasteBlocks: (afterId?: string) => Promise<void>
+  duplicateSelectedBlocks: () => Promise<void>
+  moveSelectedBlocksUp: () => Promise<void>
+  moveSelectedBlocksDown: () => Promise<void>
   showSlashMenu: (blockId: string, position: { x: number; y: number }) => void
   hideSlashMenu: () => void
   executeSlashCommand: (command: SlashCommand, blockId: string) => void

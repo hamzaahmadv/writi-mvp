@@ -454,7 +454,7 @@ export function DraggableBlockList({
           {/* Selection rectangle overlay during dragging */}
           {isSelecting && selectionStart && selectionEnd && (
             <div
-              className="pointer-events-none absolute z-50 rounded-sm border-2 border-transparent"
+              className="pointer-events-none absolute z-50 rounded-sm border-2 border-blue-400 bg-blue-100/20"
               style={{
                 left: Math.min(selectionStart.x, selectionEnd.x),
                 top: Math.min(selectionStart.y, selectionEnd.y),
@@ -469,7 +469,7 @@ export function DraggableBlockList({
             const selectionBounds = getSelectionBounds()
             return selectionBounds && !isSelecting ? (
               <div
-                className="pointer-events-none absolute z-10 rounded-md border-2 border-transparent"
+                className="pointer-events-none absolute z-10 rounded-md border-2 border-blue-300 bg-blue-50/30"
                 style={{
                   left: selectionBounds.left,
                   top: selectionBounds.top,
@@ -479,6 +479,25 @@ export function DraggableBlockList({
               />
             ) : null
           })()}
+
+          {/* Selection count indicator */}
+          {editorState.selectedBlockIds.length > 1 && !isSelecting && (
+            <div
+              className="pointer-events-none absolute z-20 rounded-full bg-blue-600 px-2 py-1 text-xs font-medium text-white shadow-lg"
+              style={{
+                left: (() => {
+                  const selectionBounds = getSelectionBounds()
+                  return selectionBounds ? selectionBounds.left - 8 : 0
+                })(),
+                top: (() => {
+                  const selectionBounds = getSelectionBounds()
+                  return selectionBounds ? selectionBounds.top - 12 : 0
+                })()
+              }}
+            >
+              {editorState.selectedBlockIds.length} selected
+            </div>
+          )}
         </div>
       </SortableContext>
     </DndContext>
