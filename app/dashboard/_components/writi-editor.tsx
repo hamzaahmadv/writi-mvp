@@ -1108,10 +1108,10 @@ export default function WritiEditor({
             // For now, focusing on essential pages
           }
 
-          // Select the newly pasted blocks
+          // Focus on the last pasted block without selecting
           setEditorState(prev => ({
             ...prev,
-            selectedBlockIds: newBlockIds,
+            selectedBlockIds: [],
             focusedBlockId: newBlockIds[newBlockIds.length - 1]
           }))
 

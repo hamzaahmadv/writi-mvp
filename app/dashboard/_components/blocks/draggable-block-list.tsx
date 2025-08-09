@@ -68,53 +68,6 @@ export function DraggableBlockList({
   const isSelectingRef = useRef(false)
   const dragThreshold = 5 // pixels to move before starting drag selection
 
-  // Calculate continuous selection area bounds
-  const getSelectionBounds = useCallback(() => {
-    if (editorState.selectedBlockIds.length === 0 || !containerRef.current) {
-      return null
-    }
-
-    let minTop = Infinity
-    let maxBottom = -Infinity
-    let minLeft = Infinity
-    let maxRight = -Infinity
-
-    const containerRect = containerRef.current.getBoundingClientRect()
-
-    editorState.selectedBlockIds.forEach(blockId => {
-      const blockElement = containerRef.current?.querySelector(
-        `[data-block-id="${blockId}"]`
-      )
-      if (blockElement) {
-        const rect = blockElement.getBoundingClientRect()
-
-        // Convert to relative coordinates
-        const top =
-          rect.top - containerRect.top + containerRef.current!.scrollTop
-        const bottom =
-          rect.bottom - containerRect.top + containerRef.current!.scrollTop
-        const left =
-          rect.left - containerRect.left + containerRef.current!.scrollLeft
-        const right =
-          rect.right - containerRect.left + containerRef.current!.scrollLeft
-
-        minTop = Math.min(minTop, top)
-        maxBottom = Math.max(maxBottom, bottom)
-        minLeft = Math.min(minLeft, left)
-        maxRight = Math.max(maxRight, right)
-      }
-    })
-
-    if (minTop === Infinity) return null
-
-    return {
-      top: minTop,
-      left: minLeft,
-      width: maxRight - minLeft,
-      height: maxBottom - minTop
-    }
-  }, [editorState.selectedBlockIds])
-
   // Helper function to get blocks within selection area
   const getBlocksInSelectionArea = useCallback(
     (start: { x: number; y: number }, end: { x: number; y: number }) => {
